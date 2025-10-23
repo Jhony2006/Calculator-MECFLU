@@ -19,49 +19,49 @@ const calculatorCategories = [
     id: 'flow-rate',
     name: 'Vazão',
     icon: Droplets,
-    color: 'from-cyan-500 to-blue-600',
+    color: 'from-purple-500 to-violet-600',
     description: 'Calcular vazão volumétrica ou mássica'
   },
   {
     id: 'pressure',
     name: 'Pressão',
     icon: Gauge,
-    color: 'from-blue-500 to-indigo-600',
+    color: 'from-violet-500 to-purple-600',
     description: 'Calcular pressão em diversos cenários'
   },
   {
     id: 'density',
     name: 'Densidade',
     icon: Weight,
-    color: 'from-indigo-500 to-purple-600',
+    color: 'from-purple-500 to-fuchsia-600',
     description: 'Calcular densidade do fluido'
   },
   {
     id: 'water-column',
     name: 'Coluna de Água',
     icon: Waves,
-    color: 'from-cyan-400 to-teal-600',
+    color: 'from-violet-400 to-purple-600',
     description: 'Converter pressão em altura de coluna de água'
   },
   {
     id: 'reynolds',
     name: 'Número de Reynolds',
     icon: TrendingUp,
-    color: 'from-purple-500 to-pink-600',
+    color: 'from-fuchsia-500 to-purple-600',
     description: 'Determinar regime de escoamento'
   },
   {
     id: 'bernoulli',
     name: 'Equação de Bernoulli',
     icon: Zap,
-    color: 'from-blue-500 to-cyan-500',
+    color: 'from-purple-500 to-violet-500',
     description: 'Conservação de energia no escoamento'
   },
   {
     id: 'unit-conversion',
     name: 'Conversor de Unidades',
     icon: RefreshCw,
-    color: 'from-green-500 to-teal-500',
+    color: 'from-violet-500 to-fuchsia-500',
     description: 'Converta unidades de medida comuns'
   }
 ];
@@ -409,16 +409,16 @@ export default function Calculator() {
       return (
         <div className="space-y-6">
            <div>
-            <Label className="text-cyan-100 text-base">Tipo de Medida</Label>
+            <Label className="text-purple-100 text-base">Tipo de Medida</Label>
             <Select value={selectedMeasurement} onValueChange={(val) => {
               handleInputChange('measurementType', val);
             }}>
-                <SelectTrigger className="w-full bg-slate-800/50 border-cyan-500/30 text-cyan-100 focus:border-cyan-400 h-12 text-lg">
+                <SelectTrigger className="w-full bg-slate-800/50 border-purple-500/30 text-purple-100 focus:border-purple-400 h-12 text-lg">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-cyan-500/30">
+                <SelectContent className="bg-slate-800 border-purple-500/30">
                   {measurementTypes.map(type => (
-                    <SelectItem key={type} value={type} className="text-cyan-100 focus:bg-cyan-500/20 focus:text-cyan-100">
+                    <SelectItem key={type} value={type} className="text-purple-100 focus:bg-purple-500/20 focus:text-purple-100">
                       {measurementTypeLabels[type]}
                     </SelectItem>
                   ))}
@@ -428,14 +428,14 @@ export default function Calculator() {
            
            <div className="flex items-end gap-3">
               <div className="flex-1">
-                  <Label htmlFor="value" className="text-cyan-100 text-base">Valor para converter</Label>
+                  <Label htmlFor="value" className="text-purple-100 text-base">Valor para converter</Label>
                   <Input
                     id="value"
                     type="number"
                     step="any"
                     value={inputs.value || ''}
                     onChange={(e) => handleInputChange('value', e.target.value)}
-                    className="bg-slate-800/50 border-cyan-500/30 text-white focus:border-cyan-400 h-12 text-lg"
+                    className="bg-slate-800/50 border-purple-500/30 text-white focus:border-purple-400 h-12 text-lg"
                     placeholder="Insira o valor"
                   />
               </div>
@@ -443,30 +443,30 @@ export default function Calculator() {
 
            <div className="flex items-center gap-3">
               <div className="flex-1">
-                <Label className="text-cyan-100 text-base">De</Label>
+                <Label className="text-purple-100 text-base">De</Label>
                 <Select value={inputs.fromUnit || availableUnits[0]} onValueChange={(val) => handleInputChange('fromUnit', val)}>
-                    <SelectTrigger className="w-full bg-slate-800/50 border-cyan-500/30 text-cyan-100 focus:border-cyan-400 h-12">
+                    <SelectTrigger className="w-full bg-slate-800/50 border-purple-500/30 text-purple-100 focus:border-purple-400 h-12">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-cyan-500/30">
+                    <SelectContent className="bg-slate-800 border-purple-500/30">
                       {availableUnits.map(unit => (
-                        <SelectItem key={unit} value={unit} className="text-cyan-100 focus:bg-cyan-500/20 focus:text-cyan-100">{unit}</SelectItem>
+                        <SelectItem key={unit} value={unit} className="text-purple-100 focus:bg-purple-500/20 focus:text-purple-100">{unit}</SelectItem>
                       ))}
                     </SelectContent>
                 </Select>
               </div>
-              <div className="self-end pb-3 text-cyan-400">
+              <div className="self-end pb-3 text-purple-400">
                 <ChevronsRight size={24}/>
               </div>
               <div className="flex-1">
-                <Label className="text-cyan-100 text-base">Para</Label>
+                <Label className="text-purple-100 text-base">Para</Label>
                 <Select value={inputs.toUnit || availableUnits[1] || availableUnits[0]} onValueChange={(val) => handleInputChange('toUnit', val)}>
-                    <SelectTrigger className="w-full bg-slate-800/50 border-cyan-500/30 text-cyan-100 focus:border-cyan-400 h-12">
+                    <SelectTrigger className="w-full bg-slate-800/50 border-purple-500/30 text-purple-100 focus:border-purple-400 h-12">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-cyan-500/30">
+                    <SelectContent className="bg-slate-800 border-purple-500/30">
                       {availableUnits.map(unit => (
-                        <SelectItem key={unit} value={unit} className="text-cyan-100 focus:bg-cyan-500/20 focus:text-cyan-100">{unit}</SelectItem>
+                        <SelectItem key={unit} value={unit} className="text-purple-100 focus:bg-purple-500/20 focus:text-purple-100">{unit}</SelectItem>
                       ))}
                     </SelectContent>
                 </Select>
@@ -618,7 +618,7 @@ export default function Calculator() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {config.map((input) => (
           <div key={input.field} className="space-y-2">
-            <Label htmlFor={input.field} className="text-cyan-100 text-base">
+            <Label htmlFor={input.field} className="text-purple-100 text-base">
               {input.label}
             </Label>
             <div className="flex gap-3">
@@ -629,7 +629,7 @@ export default function Calculator() {
                   step="any"
                   value={inputs[input.field] || ''}
                   onChange={(e) => handleInputChange(input.field, e.target.value)}
-                  className="bg-slate-800/50 border-cyan-500/30 text-white focus:border-cyan-400 h-12 text-lg"
+                  className="bg-slate-800/50 border-purple-500/30 text-white focus:border-purple-400 h-12 text-lg"
                   placeholder="Insira o valor"
                 />
               </div>
@@ -637,15 +637,15 @@ export default function Calculator() {
                 value={units[input.field] || input.defaultUnit}
                 onValueChange={(value) => handleUnitChange(input.field, value)}
               >
-                <SelectTrigger className="w-40 bg-slate-800/50 border-cyan-500/30 text-cyan-100 focus:border-cyan-400 h-12">
+                <SelectTrigger className="w-40 bg-slate-800/50 border-purple-500/30 text-purple-100 focus:border-purple-400 h-12">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-cyan-500/30">
+                <SelectContent className="bg-slate-800 border-purple-500/30">
                   {input.units.map((unit) => (
                     <SelectItem 
                       key={unit} 
                       value={unit}
-                      className="text-cyan-100 focus:bg-cyan-500/20 focus:text-cyan-100"
+                      className="text-purple-100 focus:bg-purple-500/20 focus:text-purple-100"
                     >
                       {unit}
                     </SelectItem>
@@ -664,8 +664,8 @@ export default function Calculator() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 md:p-8">
       {/* Elementos decorativos de fundo com animação. */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-20 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-20 right-20 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute top-20 left-20 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-20 right-20 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
       </div>
 
       <div className="max-w-7xl mx-auto relative z-10">
@@ -676,12 +676,12 @@ export default function Calculator() {
           className="text-center mb-12"
         >
           <div className="inline-block">
-            <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent mb-4">
+            <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-purple-400 via-violet-400 to-purple-400 bg-clip-text text-transparent mb-4">
               Calculadora de Sistemas Fluidomecânicos
             </h1>
-            <div className="h-1 w-full bg-gradient-to-r from-transparent via-cyan-400 to-transparent rounded-full" />
+            <div className="h-1 w-full bg-gradient-to-r from-transparent via-purple-400 to-transparent rounded-full" />
           </div>
-          <p className="text-cyan-100/70 mt-4 text-lg">
+          <p className="text-purple-100/70 mt-4 text-lg">
             Cálculos precisos para dinâmica de fluidos e hidráulica
           </p>
         </motion.div>
@@ -707,21 +707,21 @@ export default function Calculator() {
                     transition={{ delay: index * 0.1 }}
                   >
                     <Card
-                      className="group bg-slate-900/50 border-cyan-500/20 hover:border-cyan-400/50 cursor-pointer transition-all duration-300 hover:shadow-2xl hover:shadow-cyan-500/20 backdrop-blur-sm overflow-hidden relative"
+                      className="group bg-slate-900/50 border-purple-500/20 hover:border-purple-400/50 cursor-pointer transition-all duration-300 hover:shadow-2xl hover:shadow-purple-500/20 backdrop-blur-sm overflow-hidden relative"
                       onClick={() => handleCategorySelect(category)}
                     >
                       <div className={`absolute inset-0 bg-gradient-to-br ${category.color} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
                       
                       <CardHeader>
-                        <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                          <Icon className="w-8 h-8 text-cyan-400" />
+                        <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-purple-500/20 to-violet-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                          <Icon className="w-8 h-8 text-purple-400" />
                         </div>
-                        <CardTitle className="text-white text-xl group-hover:text-cyan-300 transition-colors">
+                        <CardTitle className="text-white text-xl group-hover:text-purple-300 transition-colors">
                           {category.name}
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <p className="text-cyan-100/60 group-hover:text-cyan-100/80 transition-colors">
+                        <p className="text-purple-100/60 group-hover:text-purple-100/80 transition-colors">
                           {category.description}
                         </p>
                       </CardContent>
@@ -742,14 +742,14 @@ export default function Calculator() {
               <Button
                 onClick={handleBack}
                 variant="ghost"
-                className="mb-6 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                className="mb-6 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Voltar para Categorias
               </Button>
 
-              <Card className="bg-slate-900/70 border-cyan-500/30 backdrop-blur-sm shadow-2xl shadow-cyan-500/10">
-                <CardHeader className="border-b border-cyan-500/20 pb-4">
+              <Card className="bg-slate-900/70 border-purple-500/30 backdrop-blur-sm shadow-2xl shadow-purple-500/10">
+                <CardHeader className="border-b border-purple-500/20 pb-4">
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-4">
                       <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${selectedCalculator.color} flex-shrink-0 flex items-center justify-center`}>
@@ -759,7 +759,7 @@ export default function Calculator() {
                         <CardTitle className="text-2xl text-white">
                           {selectedCalculator.name}
                         </CardTitle>
-                        <p className="text-cyan-100/60 text-sm mt-1">
+                        <p className="text-purple-100/60 text-sm mt-1">
                           {selectedCalculator.description}
                         </p>
                       </div>
@@ -775,7 +775,7 @@ export default function Calculator() {
                   {/* Botão para executar o cálculo. */}
                   <Button
                     onClick={calculateResult}
-                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-semibold py-6 text-lg shadow-lg shadow-cyan-500/25"
+                    className="w-full bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-400 hover:to-violet-400 text-white font-semibold py-6 text-lg shadow-lg shadow-purple-500/25"
                   >
                     <CalcIcon className="w-5 h-5 mr-2" />
                     Calcular
@@ -787,28 +787,28 @@ export default function Calculator() {
                       initial={{ opacity: 0, scale: 0.95, y: 10 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                      className="mt-6 p-6 rounded-xl bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-400/30 text-center"
+                      className="mt-6 p-6 rounded-xl bg-gradient-to-br from-purple-500/10 to-violet-500/10 border border-purple-400/30 text-center"
                     >
-                      <h3 className="text-lg font-semibold text-cyan-300 mb-3 flex items-center justify-center gap-2">
+                      <h3 className="text-lg font-semibold text-purple-300 mb-3 flex items-center justify-center gap-2">
                         <Zap className="w-5 h-5" />
                         Resultado
                       </h3>
                       
                       <div className="flex items-baseline justify-center gap-3">
-                        <div className="text-4xl md:text-5xl font-bold text-white bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-blue-400">
+                        <div className="text-4xl md:text-5xl font-bold text-white bg-clip-text text-transparent bg-gradient-to-r from-purple-300 to-violet-400">
                             {formatResultValue(result.value, selectedCalculator.id)}
                         </div>
-                        <span className="text-xl text-cyan-400">{getResultUnit(selectedCalculator.id, inputs)}</span>
+                        <span className="text-xl text-purple-400">{getResultUnit(selectedCalculator.id, inputs)}</span>
                       </div>
 
-                      <div className="mt-4 bg-slate-900/50 p-4 rounded-lg font-mono text-cyan-100 whitespace-pre-line text-sm md:text-base text-left">
+                      <div className="mt-4 bg-slate-900/50 p-4 rounded-lg font-mono text-purple-100 whitespace-pre-line text-sm md:text-base text-left">
                         {result.explanation}
                       </div>
                     </motion.div>
                   )}
 
-                  <div className="pt-4 border-t border-cyan-500/20 flex flex-col items-center">
-                    <Button variant="outline" size="sm" onClick={() => setShowFormula(!showFormula)} className="bg-transparent border-cyan-500/50 text-cyan-300 hover:bg-cyan-500/10 hover:text-cyan-200">
+                  <div className="pt-4 border-t border-purple-500/20 flex flex-col items-center">
+                    <Button variant="outline" size="sm" onClick={() => setShowFormula(!showFormula)} className="bg-transparent border-purple-500/50 text-purple-300 hover:bg-purple-500/10 hover:text-purple-200">
                         <Info className="w-4 h-4 mr-2"/>
                         {showFormula ? "Ocultar Fórmula" : "Ver Fórmula"}
                     </Button>
@@ -819,15 +819,15 @@ export default function Calculator() {
                         initial={{ opacity: 0, height: 0, y: -10 }}
                         animate={{ opacity: 1, height: 'auto', y: 0 }}
                         exit={{ opacity: 0, height: 0, y: -10 }}
-                        className="w-full mt-4 p-4 rounded-xl bg-slate-800/50 border border-cyan-400/20"
+                        className="w-full mt-4 p-4 rounded-xl bg-slate-800/50 border border-purple-400/20"
                       >
-                        <h3 className="text-lg font-semibold text-cyan-300 mb-2">
+                        <h3 className="text-lg font-semibold text-purple-300 mb-2">
                           {getFormulaExplanation(selectedCalculator.id).title}
                         </h3>
-                        <div className="bg-slate-900/50 p-3 rounded-lg font-mono text-center text-cyan-100 text-lg mb-3">
+                        <div className="bg-slate-900/50 p-3 rounded-lg font-mono text-center text-purple-100 text-lg mb-3">
                           {getFormulaExplanation(selectedCalculator.id).formula}
                         </div>
-                        <p className="text-cyan-100/70 text-sm">
+                        <p className="text-purple-100/70 text-sm">
                           {getFormulaExplanation(selectedCalculator.id).description}
                         </p>
                       </motion.div>
