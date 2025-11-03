@@ -1220,13 +1220,15 @@ export default function Calculator() {
                   )}
 
                   <div className="pt-4 border-t border-purple-500/20 flex flex-col items-center">
-                    <Button variant="outline" size="sm" onClick={() => setShowFormula(!showFormula)} className="bg-transparent border-purple-500/50 text-purple-300 hover:bg-purple-500/10 hover:text-purple-200">
-                        <Info className="w-4 h-4 mr-2"/>
-                        {showFormula ? "Ocultar Fórmula" : "Ver Fórmula"}
-                    </Button>
+                    {selectedCalculator.id !== 'unit-conversion' && (
+                      <Button variant="outline" size="sm" onClick={() => setShowFormula(!showFormula)} className="bg-transparent border-purple-500/50 text-purple-300 hover:bg-purple-500/10 hover:text-purple-200">
+                          <Info className="w-4 h-4 mr-2"/>
+                          {showFormula ? "Ocultar Fórmula" : "Ver Fórmula"}
+                      </Button>
+                    )}
                     {/* Animação para mostrar/ocultar a explicação da fórmula. */}
                     <AnimatePresence>
-                    {showFormula && (
+                    {showFormula && selectedCalculator.id !== 'unit-conversion' && (
                       <motion.div
                         initial={{ opacity: 0, height: 0, y: -10 }}
                         animate={{ opacity: 1, height: 'auto', y: 0 }}
