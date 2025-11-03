@@ -23,6 +23,13 @@ const calculatorCategories = [
     description: 'Calcular vazão volumétrica ou mássica'
   },
   {
+    id: 'velocity-flow',
+    name: 'Velocidade/Vazão',
+    icon: TrendingUp,
+    color: 'from-blue-500 to-violet-600',
+    description: 'Calcular velocidade a partir da vazão'
+  },
+  {
     id: 'pressure',
     name: 'Pressão',
     icon: Gauge,
@@ -49,6 +56,48 @@ const calculatorCategories = [
     icon: TrendingUp,
     color: 'from-fuchsia-500 to-purple-600',
     description: 'Determinar regime de escoamento'
+  },
+  {
+    id: 'relative-roughness',
+    name: 'Rugosidade Relativa',
+    icon: Waves,
+    color: 'from-green-500 to-blue-600',
+    description: 'Calcular rugosidade relativa da tubulação'
+  },
+  {
+    id: 'friction-factor',
+    name: 'Fator de Atrito',
+    icon: Zap,
+    color: 'from-orange-500 to-red-600',
+    description: 'Calcular fator de atrito (Swamee-Jain)'
+  },
+  {
+    id: 'head-loss',
+    name: 'Perda de Carga',
+    icon: TrendingUp,
+    color: 'from-red-500 to-orange-600',
+    description: 'Calcular perda de carga total'
+  },
+  {
+    id: 'energy-equation',
+    name: 'Equação da Energia',
+    icon: Zap,
+    color: 'from-blue-500 to-green-600',
+    description: 'Calcular carga manométrica da bomba'
+  },
+  {
+    id: 'pump-power',
+    name: 'Potência da Bomba',
+    icon: Zap,
+    color: 'from-yellow-500 to-orange-600',
+    description: 'Calcular potência da bomba'
+  },
+  {
+    id: 'npsh',
+    name: 'NPSH Disponível',
+    icon: Gauge,
+    color: 'from-cyan-500 to-blue-600',
+    description: 'Calcular NPSH disponível'
   },
   {
     id: 'bernoulli',
@@ -239,6 +288,16 @@ export default function Calculator() {
         break;
       }
       
+      case 'velocity-flow': {
+        if (inputs.flow && inputs.area) {
+          const flowSI = convertToSI(inputs.flow, 'flow', 'flow');
+          const areaSI = convertToSI(inputs.area, 'area', 'area');
+          calculatedResult = flowSI / areaSI;
+          explanation = `Velocidade (v) = Vazão (Q) / Área da Seção Transversal (A)\n\nValores em SI:\nQ = ${inputs.flow} ${units.flow || 'm³/s'} = ${flowSI.toFixed(6)} m³/s\nA = ${inputs.area} ${units.area || 'm²'} = ${areaSI.toFixed(6)} m²\n\nv = ${flowSI.toFixed(6)} / ${areaSI.toFixed(6)} = ${calculatedResult.toFixed(4)} m/s\nv = ${(calculatedResult * 3.6).toFixed(4)} km/h`;
+        }
+        break;
+      }
+      
       case 'pressure': {
         if (inputs.force && inputs.area) {
           const forceSI = convertToSI(inputs.force, 'force', 'force');
@@ -293,6 +352,107 @@ export default function Calculator() {
         break;
       }
       
+      case 'relative-roughness': {
+        if (inputs.roughness && inputs.diameter) {
+          const roughnessSI = convertToSI(inputs.roughness, 'roughness', 'length');
+          const diameterSI = convertToSI(inputs.diameter, 'diameter', 'length');
+          
+          calculatedResult = roughnessSI / diameterSI;
+          
+          explanation = `Rugosidade Relativa (ε/D) = Rugosidade Absoluta (ε) / Diâmetro (D)\n\nValores em SI:\nε = ${inputs.roughness} ${units.roughness || 'mm'} = ${roughnessSI.toFixed(6)} m\nD = ${inputs.diameter} ${units.diameter || 'm'} = ${diameterSI.toFixed(4)} m\n\nε/D = ${roughnessSI.toFixed(6)} / ${diameterSI.toFixed(4)} = ${calculatedResult.toFixed(6)}\n\nEste valor é adimensional e representa a rugosidade relativa da tubulação.`;
+        }
+        break;
+      }
+      
+      case 'friction-factor': {
+        if (inputs.reynolds && inputs.relativeRoughness) {
+          const reynoldsSI = inputs.reynolds; // Adimensional
+          const relativeRoughnessSI = inputs.relativeRoughness; // Adimensional
+          
+          // Equação de Swamee-Jain para fator de atrito
+          calculatedResult = 0.25 / Math.pow(Math.log10(relativeRoughnessSI/3.7 + 5.74/Math.pow(reynoldsSI, 0.9)), 2);
+          
+          explanation = `Fator de Atrito (f) - Equação de Swamee-Jain:\nf = 0.25 / [log₁₀(ε/D/3.7 + 5.74/Re^0.9)]²\n\nValores:\nNúmero de Reynolds (Re) = ${reynoldsSI.toFixed(0)}\nRugosidade Relativa (ε/D) = ${relativeRoughnessSI.toFixed(6)}\n\nf = 0.25 / [log₁₀(${relativeRoughnessSI.toFixed(6)}/3.7 + 5.74/${reynoldsSI.toFixed(0)}^0.9)]²\nf = ${calculatedResult.toFixed(6)}\n\nEste valor é adimensional e representa o fator de atrito de Darcy-Weisbach.`;
+        }
+        break;
+      }
+      
+      case 'head-loss': {
+        if (inputs.frictionFactor && inputs.length && inputs.diameter && inputs.velocity && inputs.kSum) {
+          const frictionFactorSI = inputs.frictionFactor; // Adimensional
+          const lengthSI = convertToSI(inputs.length, 'length', 'length');
+          const diameterSI = convertToSI(inputs.diameter, 'diameter', 'length');
+          const velocitySI = convertToSI(inputs.velocity, 'velocity', 'velocity');
+          const kSumSI = inputs.kSum; // Adimensional - soma dos coeficientes de perda localizada
+          const g = 9.81; // m/s²
+          
+          // Perda de carga distribuída (Darcy-Weisbach)
+          const distributedLoss = frictionFactorSI * (lengthSI / diameterSI) * (Math.pow(velocitySI, 2) / (2 * g));
+          
+          // Perda de carga localizada
+          const localizedLoss = kSumSI * (Math.pow(velocitySI, 2) / (2 * g));
+          
+          // Perda de carga total
+          calculatedResult = distributedLoss + localizedLoss;
+          
+          explanation = `Perda de Carga Total (hₜ) = Perda Distribuída (hₗ) + Perda Localizada (hₘ)\n\nPerda Distribuída (Darcy-Weisbach):\nhₗ = f × (L/D) × (v²/2g)\n\nPerda Localizada:\nhₘ = Σk × (v²/2g)\n\nValores em SI:\nFator de Atrito (f) = ${frictionFactorSI.toFixed(6)}\nComprimento (L) = ${inputs.length} ${units.length || 'm'} = ${lengthSI.toFixed(2)} m\nDiâmetro (D) = ${inputs.diameter} ${units.diameter || 'm'} = ${diameterSI.toFixed(4)} m\nVelocidade (v) = ${inputs.velocity} ${units.velocity || 'm/s'} = ${velocitySI.toFixed(4)} m/s\nSoma dos Coeficientes (Σk) = ${kSumSI.toFixed(2)}\ng = 9,81 m/s²\n\nPerda Distribuída = ${distributedLoss.toFixed(4)} m\nPerda Localizada = ${localizedLoss.toFixed(4)} m\nPerda Total = ${calculatedResult.toFixed(4)} m`;
+        }
+        break;
+      }
+      
+      case 'energy-equation': {
+        if (inputs.z1 && inputs.z2 && inputs.p1 && inputs.p2 && inputs.v1 && inputs.v2 && inputs.headLoss && inputs.density) {
+          const z1SI = convertToSI(inputs.z1, 'z1', 'length');
+          const z2SI = convertToSI(inputs.z2, 'z2', 'length');
+          const p1SI = convertToSI(inputs.p1, 'p1', 'pressure');
+          const p2SI = convertToSI(inputs.p2, 'p2', 'pressure');
+          const v1SI = convertToSI(inputs.v1, 'v1', 'velocity');
+          const v2SI = convertToSI(inputs.v2, 'v2', 'velocity');
+          const headLossSI = convertToSI(inputs.headLoss, 'headLoss', 'length');
+          const densitySI = convertToSI(inputs.density, 'density', 'density');
+          const g = 9.81; // m/s²
+          
+          // Carga manométrica da bomba (HB) usando a equação da energia
+          calculatedResult = (p2SI - p1SI) / (densitySI * g) + (Math.pow(v2SI, 2) - Math.pow(v1SI, 2)) / (2 * g) + (z2SI - z1SI) + headLossSI;
+          
+          explanation = `Equação da Energia para Carga Manométrica da Bomba (Hₘ):\nHₘ = (P₂-P₁)/(ρg) + (v₂²-v₁²)/(2g) + (z₂-z₁) + hₜ\n\nValores em SI:\nCota 1 (z₁) = ${inputs.z1} ${units.z1 || 'm'} = ${z1SI.toFixed(2)} m\nCota 2 (z₂) = ${inputs.z2} ${units.z2 || 'm'} = ${z2SI.toFixed(2)} m\nPressão 1 (P₁) = ${inputs.p1} ${units.p1 || 'Pa'} = ${p1SI.toFixed(2)} Pa\nPressão 2 (P₂) = ${inputs.p2} ${units.p2 || 'Pa'} = ${p2SI.toFixed(2)} Pa\nVelocidade 1 (v₁) = ${inputs.v1} ${units.v1 || 'm/s'} = ${v1SI.toFixed(4)} m/s\nVelocidade 2 (v₂) = ${inputs.v2} ${units.v2 || 'm/s'} = ${v2SI.toFixed(4)} m/s\nPerda de Carga (hₜ) = ${inputs.headLoss} ${units.headLoss || 'm'} = ${headLossSI.toFixed(4)} m\nDensidade (ρ) = ${inputs.density} ${units.density || 'kg/m³'} = ${densitySI.toFixed(2)} kg/m³\ng = 9,81 m/s²\n\nHₘ = ${((p2SI - p1SI) / (densitySI * g)).toFixed(4)} + ${((Math.pow(v2SI, 2) - Math.pow(v1SI, 2)) / (2 * g)).toFixed(4)} + ${(z2SI - z1SI).toFixed(4)} + ${headLossSI.toFixed(4)}\nHₘ = ${calculatedResult.toFixed(4)} m`;
+        }
+        break;
+      }
+      
+      case 'pump-power': {
+        if (inputs.flow && inputs.head && inputs.density && inputs.efficiency) {
+          const flowSI = convertToSI(inputs.flow, 'flow', 'flow');
+          const headSI = convertToSI(inputs.head, 'head', 'length');
+          const densitySI = convertToSI(inputs.density, 'density', 'density');
+          const efficiencySI = inputs.efficiency / 100; // Convertendo de porcentagem para decimal
+          const g = 9.81; // m/s²
+          
+          // Potência da bomba
+          calculatedResult = (densitySI * g * flowSI * headSI) / efficiencySI;
+          
+          explanation = `Potência da Bomba (P) = (ρ × g × Q × H) / η\n\nValores em SI:\nDensidade (ρ) = ${inputs.density} ${units.density || 'kg/m³'} = ${densitySI.toFixed(2)} kg/m³\ng = 9,81 m/s²\nVazão (Q) = ${inputs.flow} ${units.flow || 'm³/s'} = ${flowSI.toFixed(6)} m³/s\nAltura Manométrica (H) = ${inputs.head} ${units.head || 'm'} = ${headSI.toFixed(2)} m\nEficiência (η) = ${inputs.efficiency}% = ${efficiencySI.toFixed(2)}\n\nP = (${densitySI.toFixed(2)} × 9,81 × ${flowSI.toFixed(6)} × ${headSI.toFixed(2)}) / ${efficiencySI.toFixed(2)}\nP = ${calculatedResult.toFixed(2)} W\nP = ${(calculatedResult / 1000).toFixed(4)} kW\nP = ${(calculatedResult / 745.7).toFixed(4)} hp`;
+        }
+        break;
+      }
+      
+      case 'npsh': {
+        if (inputs.atmosphericPressure && inputs.vaporPressure && inputs.suctionHeight && inputs.headLoss && inputs.density) {
+          const atmosphericPressureSI = convertToSI(inputs.atmosphericPressure, 'atmosphericPressure', 'pressure');
+          const vaporPressureSI = convertToSI(inputs.vaporPressure, 'vaporPressure', 'pressure');
+          const suctionHeightSI = convertToSI(inputs.suctionHeight, 'suctionHeight', 'length');
+          const headLossSI = convertToSI(inputs.headLoss, 'headLoss', 'length');
+          const densitySI = convertToSI(inputs.density, 'density', 'density');
+          const g = 9.81; // m/s²
+          
+          // NPSH Disponível
+          calculatedResult = (atmosphericPressureSI - vaporPressureSI) / (densitySI * g) - suctionHeightSI - headLossSI;
+          
+          explanation = `NPSH Disponível = (Pₐₜₘ - Pᵥ) / (ρg) - hₛ - hₗ\n\nValores em SI:\nPressão Atmosférica (Pₐₜₘ) = ${inputs.atmosphericPressure} ${units.atmosphericPressure || 'Pa'} = ${atmosphericPressureSI.toFixed(2)} Pa\nPressão de Vapor (Pᵥ) = ${inputs.vaporPressure} ${units.vaporPressure || 'Pa'} = ${vaporPressureSI.toFixed(2)} Pa\nAltura de Sucção (hₛ) = ${inputs.suctionHeight} ${units.suctionHeight || 'm'} = ${suctionHeightSI.toFixed(2)} m\nPerda de Carga na Sucção (hₗ) = ${inputs.headLoss} ${units.headLoss || 'm'} = ${headLossSI.toFixed(4)} m\nDensidade (ρ) = ${inputs.density} ${units.density || 'kg/m³'} = ${densitySI.toFixed(2)} kg/m³\ng = 9,81 m/s²\n\nNPSH = ${((atmosphericPressureSI - vaporPressureSI) / (densitySI * g)).toFixed(4)} - ${suctionHeightSI.toFixed(2)} - ${headLossSI.toFixed(4)}\nNPSH = ${calculatedResult.toFixed(4)} m`;
+        }
+        break;
+      }
+      
       case 'bernoulli': {
         if (inputs.pressure1 && inputs.velocity1 && inputs.height1 && inputs.velocity2 && inputs.height2 && inputs.density) {
           const g = 9.81;
@@ -338,6 +498,11 @@ export default function Calculator() {
         formula: 'Q = v × A',
         description: 'A vazão (Q) é o produto da velocidade do fluido (v) pela área da seção transversal (A) do duto.'
       },
+      'velocity-flow': {
+        title: 'Velocidade (v)',
+        formula: 'v = Q / A',
+        description: 'A velocidade do fluido (v) é a vazão (Q) dividida pela área da seção transversal (A) do duto.'
+      },
       'pressure': {
         title: 'Pressão (P)',
         formula: 'P = F / A',
@@ -358,12 +523,42 @@ export default function Calculator() {
         formula: 'Re = (ρ × v × D) / μ',
         description: 'O Número de Reynolds é um número adimensional que ajuda a prever padrões de escoamento. Compara as forças de inércia com as forças de viscosidade. (ρ: densidade, v: velocidade, D: comprimento característico, μ: viscosidade dinâmica).'
       },
+      'relative-roughness': {
+        title: 'Rugosidade Relativa (ε/D)',
+        formula: 'ε/D',
+        description: 'A rugosidade relativa é a razão entre a rugosidade absoluta da superfície interna do tubo (ε) e o diâmetro do tubo (D).'
+      },
+      'friction-factor': {
+        title: 'Fator de Atrito (f) - Equação de Swamee-Jain',
+        formula: 'f = 0.25 / [log₁₀(ε/3.7D + 5.74/Re^0.9)]²',
+        description: 'A equação de Swamee-Jain é uma aproximação para o fator de atrito de Darcy-Weisbach para escoamento turbulento em tubos. Depende da rugosidade relativa (ε/D) e do número de Reynolds (Re).'
+      },
+      'head-loss': {
+        title: 'Perda de Carga Total (hₜ)',
+        formula: 'hₜ = f × (L/D) × (v²/2g) + Σk × (v²/2g)',
+        description: 'A perda de carga total é a soma da perda de carga distribuída (primeiro termo) e da perda de carga localizada (segundo termo). Onde f é o fator de atrito, L é o comprimento do tubo, D é o diâmetro, v é a velocidade do fluido, g é a aceleração da gravidade e Σk é a soma dos coeficientes de perda localizada.'
+      },
+      'energy-equation': {
+        title: 'Equação da Energia para Carga Manométrica (Hₘ)',
+        formula: 'Hₘ = (z₂-z₁) + (P₂-P₁)/(ρg) + (v₂²-v₁²)/(2g) + hₜ',
+        description: 'A carga manométrica da bomba é calculada pela equação da energia, considerando a diferença de cotas (z₂-z₁), a diferença de pressões (P₂-P₁), a diferença de energias cinéticas (v₂²-v₁²) e a perda de carga total (hₜ).'
+      },
+      'pump-power': {
+        title: 'Potência da Bomba (P)',
+        formula: 'P = ρ × g × Q × H / η',
+        description: 'A potência da bomba é calculada pelo produto da densidade do fluido (ρ), aceleração da gravidade (g), vazão (Q) e altura manométrica (H), dividido pela eficiência da bomba (η).'
+      },
+      'npsh': {
+        title: 'NPSH Disponível',
+        formula: 'NPSH = (Pₐₜₘ - Pᵥ)/(ρg) - hₛ - hₗ',
+        description: 'O NPSH disponível é calculado pela diferença entre a pressão atmosférica (Pₐₜₘ) e a pressão de vapor do fluido (Pᵥ), dividida pelo produto da densidade (ρ) e aceleração da gravidade (g), menos a altura de sucção (hₛ) e a perda de carga na linha de sucção (hₗ).'
+      },
       'bernoulli': {
         title: 'Equação de Bernoulli',
         formula: 'P + ½ρv² + ρgh = constante',
         description: 'A equação de Bernoulli descreve a conservação de energia para um fluido em movimento. A soma da pressão (P), da energia cinética (½ρv²) e da energia potencial (ρgh) permanece constante ao longo de uma linha de corrente.'
       },
-       'unit-conversion': {
+      'unit-conversion': {
         title: 'Conversão de Unidades',
         formula: 'Valor₂ = Valor₁ × (Fator₁ / Fator₂)',
         description: 'A conversão é feita transformando o valor inicial para a unidade base do SI (Sistema Internacional) e depois convertendo da unidade base para a unidade final desejada.'
@@ -386,10 +581,17 @@ export default function Calculator() {
   const getResultUnit = (calculatorId, currentInputs) => {
       switch(calculatorId) {
           case 'flow-rate': return 'm³/s';
+          case 'velocity-flow': return 'm/s';
           case 'pressure': return 'Pa';
           case 'density': return 'kg/m³';
           case 'water-column': return 'm';
           case 'reynolds': return '(adimensional)';
+          case 'relative-roughness': return '(adimensional)';
+          case 'friction-factor': return '(adimensional)';
+          case 'head-loss': return 'm';
+          case 'energy-equation': return 'm';
+          case 'pump-power': return 'W';
+          case 'npsh': return 'm';
           case 'bernoulli': return 'Pa';
           case 'unit-conversion': return currentInputs.toUnit || '';
           default: return '';
@@ -494,6 +696,22 @@ export default function Calculator() {
           defaultUnit: 'm²'
         }
       ],
+      'velocity-flow': [
+        { 
+          field: 'flow', 
+          label: 'Vazão (Q)', 
+          unitType: 'flow',
+          units: ['m³/s', 'm³/h', 'L/s', 'L/min', 'gal/min (US)'],
+          defaultUnit: 'm³/s'
+        },
+        { 
+          field: 'area', 
+          label: 'Área da Seção Transversal (A)', 
+          unitType: 'area',
+          units: ['m²', 'cm²', 'ft²', 'in²'],
+          defaultUnit: 'm²'
+        }
+      ],
       'pressure': [
         { 
           field: 'force', 
@@ -563,6 +781,200 @@ export default function Calculator() {
           unitType: 'viscosity',
           units: ['Pa·s', 'cP (centiPoise)', 'P (Poise)'],
           defaultUnit: 'Pa·s'
+        }
+      ],
+      'relative-roughness': [
+        { 
+          field: 'roughness', 
+          label: 'Rugosidade Absoluta (ε)', 
+          unitType: 'length',
+          units: ['m', 'cm', 'mm', 'ft', 'in'],
+          defaultUnit: 'mm'
+        },
+        { 
+          field: 'diameter', 
+          label: 'Diâmetro da Tubulação (D)', 
+          unitType: 'length',
+          units: ['m', 'cm', 'mm', 'ft', 'in'],
+          defaultUnit: 'm'
+        }
+      ],
+      'friction-factor': [
+        { 
+          field: 'reynolds', 
+          label: 'Número de Reynolds (Re)', 
+          unitType: 'dimensionless',
+          units: [''],
+          defaultUnit: ''
+        },
+        { 
+          field: 'relativeRoughness', 
+          label: 'Rugosidade Relativa (ε/D)', 
+          unitType: 'dimensionless',
+          units: [''],
+          defaultUnit: ''
+        }
+      ],
+      'head-loss': [
+        { 
+          field: 'frictionFactor', 
+          label: 'Fator de Atrito (f)', 
+          unitType: 'dimensionless',
+          units: [''],
+          defaultUnit: ''
+        },
+        { 
+          field: 'length', 
+          label: 'Comprimento da Tubulação (L)', 
+          unitType: 'length',
+          units: ['m', 'cm', 'mm', 'ft', 'in'],
+          defaultUnit: 'm'
+        },
+        { 
+          field: 'diameter', 
+          label: 'Diâmetro da Tubulação (D)', 
+          unitType: 'length',
+          units: ['m', 'cm', 'mm', 'ft', 'in'],
+          defaultUnit: 'm'
+        },
+        { 
+          field: 'velocity', 
+          label: 'Velocidade do Escoamento (v)', 
+          unitType: 'velocity',
+          units: ['m/s', 'km/h', 'ft/s', 'mph'],
+          defaultUnit: 'm/s'
+        },
+        { 
+          field: 'kSum', 
+          label: 'Soma dos Coeficientes de Perda Localizada (Σk)', 
+          unitType: 'dimensionless',
+          units: [''],
+          defaultUnit: ''
+        }
+      ],
+      'energy-equation': [
+        { 
+          field: 'z1', 
+          label: 'Cota no Ponto 1 (z₁)', 
+          unitType: 'length',
+          units: ['m', 'cm', 'mm', 'ft', 'in'],
+          defaultUnit: 'm'
+        },
+        { 
+          field: 'z2', 
+          label: 'Cota no Ponto 2 (z₂)', 
+          unitType: 'length',
+          units: ['m', 'cm', 'mm', 'ft', 'in'],
+          defaultUnit: 'm'
+        },
+        { 
+          field: 'p1', 
+          label: 'Pressão no Ponto 1 (P₁)', 
+          unitType: 'pressure',
+          units: ['Pa', 'kPa', 'bar', 'psi', 'atm'],
+          defaultUnit: 'Pa'
+        },
+        { 
+          field: 'p2', 
+          label: 'Pressão no Ponto 2 (P₂)', 
+          unitType: 'pressure',
+          units: ['Pa', 'kPa', 'bar', 'psi', 'atm'],
+          defaultUnit: 'Pa'
+        },
+        { 
+          field: 'v1', 
+          label: 'Velocidade no Ponto 1 (v₁)', 
+          unitType: 'velocity',
+          units: ['m/s', 'km/h', 'ft/s', 'mph'],
+          defaultUnit: 'm/s'
+        },
+        { 
+          field: 'v2', 
+          label: 'Velocidade no Ponto 2 (v₂)', 
+          unitType: 'velocity',
+          units: ['m/s', 'km/h', 'ft/s', 'mph'],
+          defaultUnit: 'm/s'
+        },
+        { 
+          field: 'headLoss', 
+          label: 'Perda de Carga Total (hₜ)', 
+          unitType: 'length',
+          units: ['m', 'cm', 'mm', 'ft', 'in'],
+          defaultUnit: 'm'
+        },
+        { 
+          field: 'density', 
+          label: 'Densidade do Fluido (ρ)', 
+          unitType: 'density',
+          units: ['kg/m³', 'g/cm³', 'lb/ft³'],
+          defaultUnit: 'kg/m³'
+        }
+      ],
+      'pump-power': [
+        { 
+          field: 'flow', 
+          label: 'Vazão (Q)', 
+          unitType: 'flow',
+          units: ['m³/s', 'm³/h', 'L/s', 'L/min', 'gal/min (US)'],
+          defaultUnit: 'm³/s'
+        },
+        { 
+          field: 'head', 
+          label: 'Altura Manométrica (H)', 
+          unitType: 'length',
+          units: ['m', 'cm', 'mm', 'ft', 'in'],
+          defaultUnit: 'm'
+        },
+        { 
+          field: 'density', 
+          label: 'Densidade do Fluido (ρ)', 
+          unitType: 'density',
+          units: ['kg/m³', 'g/cm³', 'lb/ft³'],
+          defaultUnit: 'kg/m³'
+        },
+        { 
+          field: 'efficiency', 
+          label: 'Eficiência da Bomba (η)', 
+          unitType: 'percentage',
+          units: ['%'],
+          defaultUnit: '%'
+        }
+      ],
+      'npsh': [
+        { 
+          field: 'atmosphericPressure', 
+          label: 'Pressão Atmosférica (Pₐₜₘ)', 
+          unitType: 'pressure',
+          units: ['Pa', 'kPa', 'bar', 'psi', 'atm'],
+          defaultUnit: 'Pa'
+        },
+        { 
+          field: 'vaporPressure', 
+          label: 'Pressão de Vapor (Pᵥ)', 
+          unitType: 'pressure',
+          units: ['Pa', 'kPa', 'bar', 'psi', 'atm'],
+          defaultUnit: 'Pa'
+        },
+        { 
+          field: 'suctionHeight', 
+          label: 'Altura de Sucção (hₛ)', 
+          unitType: 'length',
+          units: ['m', 'cm', 'mm', 'ft', 'in'],
+          defaultUnit: 'm'
+        },
+        { 
+          field: 'headLoss', 
+          label: 'Perda de Carga na Sucção (hₗ)', 
+          unitType: 'length',
+          units: ['m', 'cm', 'mm', 'ft', 'in'],
+          defaultUnit: 'm'
+        },
+        { 
+          field: 'density', 
+          label: 'Densidade do Fluido (ρ)', 
+          unitType: 'density',
+          units: ['kg/m³', 'g/cm³', 'lb/ft³'],
+          defaultUnit: 'kg/m³'
         }
       ],
       'bernoulli': [
