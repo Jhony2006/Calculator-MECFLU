@@ -389,13 +389,16 @@ export default function Calculator() {
           const diameterSI = convertToSI(inputs.diameter, 'diameter', 'length');
           const velocitySI = convertToSI(inputs.velocity, 'velocity', 'velocity');
           const lequivalentSI = convertToSI(inputs.equivalentLength, 'equivalentLength', 'length');
+          const sumK = parseFloat(inputs.lossCoefficientSum ?? 0); // Adimensional
           const g = 10; // m/s²
           
-          // Perda de carga total (comprimento real + comprimento equivalente)
+          // Perda de carga por atrito (maior) e perdas localizadas (ΣK)
           const totalLength = lengthSI + lequivalentSI;
-          calculatedResult = frictionFactorSI * (totalLength / diameterSI) * (Math.pow(velocitySI, 2) / (2 * g));
+          const headLossMajor = frictionFactorSI * (totalLength / diameterSI);
+          const velocityHead = Math.pow(velocitySI, 2) / (2 * g);
+          calculatedResult = (headLossMajor + sumK) * velocityHead;
           
-          explanation = `Perda de Carga Total (hₜ) = f × ((L + Leq)/D) × (v²/2g)\n\nOnde:\nf = fator de atrito\nL = comprimento real da tubulação\nLeq = comprimento equivalente das perdas localizadas\nD = diâmetro da tubulação\nv = velocidade do fluido\ng = aceleração da gravidade\n\nValores em SI:\nFator de Atrito (f) = ${frictionFactorSI.toFixed(6)}\nComprimento Real (L) = ${inputs.length} ${units.length || 'm'} = ${lengthSI.toFixed(2)} m\nComprimento Equivalente (Leq) = ${inputs.equivalentLength} ${units.equivalentLength || 'm'} = ${lequivalentSI.toFixed(2)} m\nComprimento Total (L + Leq) = ${totalLength.toFixed(2)} m\nDiâmetro (D) = ${inputs.diameter} ${units.diameter || 'm'} = ${diameterSI.toFixed(4)} m\nVelocidade (v) = ${inputs.velocity} ${units.velocity || 'm/s'} = ${velocitySI.toFixed(4)} m/s\ng = 10 m/s²\n\nPerda Total = ${calculatedResult.toFixed(4)} m`;
+          explanation = `Perda de Carga Total (hₜ) = [ f(L+Leq)/D + ΣK ] × (v²/2g)\n\nOnde:\nf = fator de atrito\nL = comprimento real da tubulação\nLeq = comprimento equivalente das perdas localizadas\nD = diâmetro da tubulação\nΣK = soma dos coeficientes de perda localizada\nv = velocidade do fluido\ng = aceleração da gravidade\n\nValores em SI:\nFator de Atrito (f) = ${frictionFactorSI.toFixed(6)}\nComprimento Real (L) = ${inputs.length} ${units.length || 'm'} = ${lengthSI.toFixed(2)} m\nComprimento Equivalente (Leq) = ${inputs.equivalentLength} ${units.equivalentLength || 'm'} = ${lequivalentSI.toFixed(2)} m\nComprimento Total (L + Leq) = ${totalLength.toFixed(2)} m\nDiâmetro (D) = ${inputs.diameter} ${units.diameter || 'm'} = ${diameterSI.toFixed(4)} m\nΣK = ${sumK.toFixed(4)} (adimensional)\nVelocidade (v) = ${inputs.velocity} ${units.velocity || 'm/s'} = ${velocitySI.toFixed(4)} m/s\ng = 10 m/s²\n\nf(L+Leq)/D = ${headLossMajor.toFixed(6)}\n(v²/2g) = ${velocityHead.toFixed(6)}\n\nPerda Total hₜ = [${headLossMajor.toFixed(6)} + ${sumK.toFixed(4)}] × ${velocityHead.toFixed(6)}\nhₜ = ${calculatedResult.toFixed(4)} m`;
         }
         break;
       }
@@ -424,15 +427,22 @@ export default function Calculator() {
         if (inputs.flow && inputs.head && inputs.density && inputs.efficiency) {
           const flowSI = convertToSI(inputs.flow, 'flow', 'flow');
           const headSI = convertToSI(inputs.head, 'head', 'length');
-          const densitySI = convertToSI(inputs.density, 'density', 'density');
           const efficiencySI = inputs.efficiency / 100; // Convertendo de porcentagem para decimal
           const g = 10; // m/s²
+          const densityUnit = units.density || 'kg/m³';
+          let gammaSI;
+          let densitySI;
+          if (densityUnit === 'N/m³') {
+            gammaSI = inputs.density; // Já fornecido como peso específico em SI
+          } else {
+            densitySI = convertToSI(inputs.density, 'density', 'density');
+            gammaSI = densitySI * g; // Peso específico
+          }
           
           // Potência da bomba: P = 𝜸 × Q × Hb (onde 𝜸 = ρg)
-          const gamma = densitySI * g; // Peso específico
-          calculatedResult = (gamma * flowSI * headSI) / efficiencySI;
+          calculatedResult = (gammaSI * flowSI * headSI) / efficiencySI;
           
-          explanation = `Potência da Bomba (P) = 𝜸 × Q × Hb / η\nOnde: 𝜸 = ρg (peso específico)\n\nValores em SI:\nDensidade (ρ) = ${inputs.density} ${units.density || 'kg/m³'} = ${densitySI.toFixed(2)} kg/m³\nPeso Específico (𝜸) = ρ × g (g = 10 m/s²) = ${gamma.toFixed(2)} N/m³\nVazão (Q) = ${inputs.flow} ${units.flow || 'm³/s'} = ${flowSI.toFixed(6)} m³/s\nAltura Manométrica (Hb) = ${inputs.head} ${units.head || 'm'} = ${headSI.toFixed(2)} m\nEficiência (η) = ${inputs.efficiency}% = ${efficiencySI.toFixed(2)}\n\nP = (${gamma.toFixed(2)} × ${flowSI.toFixed(6)} × ${headSI.toFixed(2)}) / ${efficiencySI.toFixed(2)}\nP = ${calculatedResult.toFixed(2)} W\nP = ${(calculatedResult / 1000).toFixed(4)} kW\nP = ${(calculatedResult / 745.7).toFixed(4)} hp`;
+          explanation = `Potência da Bomba (P) = 𝜸 × Q × Hb / η\nOnde: 𝜸 = ρg (peso específico)\n\nValores em SI:\n${densityUnit === 'N/m³' ? `Peso Específico (𝜸) = ${gammaSI.toFixed(2)} N/m³` : `Densidade (ρ) = ${inputs.density} ${units.density || 'kg/m³'} ⇒ ρ(SI) = ${densitySI?.toFixed(2)} kg/m³\nPeso Específico (𝜸) = ρ × g (g = 10 m/s²) = ${gammaSI.toFixed(2)} N/m³`}\nVazão (Q) = ${inputs.flow} ${units.flow || 'm³/s'} = ${flowSI.toFixed(6)} m³/s\nAltura Manométrica (Hb) = ${inputs.head} ${units.head || 'm'} = ${headSI.toFixed(2)} m\nEficiência (η) = ${inputs.efficiency}% = ${efficiencySI.toFixed(2)}\n\nP = (${gammaSI.toFixed(2)} × ${flowSI.toFixed(6)} × ${headSI.toFixed(2)}) / ${efficiencySI.toFixed(2)}\nP = ${calculatedResult.toFixed(2)} W\nP = ${(calculatedResult / 1000).toFixed(4)} kW\nP = ${(calculatedResult / 745.7).toFixed(4)} hp`;
         }
         break;
       }
@@ -544,8 +554,8 @@ export default function Calculator() {
       },
       'head-loss': {
         title: 'Perda de Carga Total (hₜ)',
-        formula: 'hₜ = f × ((L + Leq)/D) × (v²/2g)',
-        description: 'A perda de carga total considera o comprimento equivalente (Leq) que representa as perdas localizadas em termos de comprimento de tubo reta. Onde f é o fator de atrito, L é o comprimento real do tubo, Leq é o comprimento equivalente das perdas localizadas, D é o diâmetro, v é a velocidade do fluido e g é a aceleração da gravidade.'
+        formula: 'hₜ = [ f(L+Leq)/D + ΣK ] × (v²/2g)',
+        description: 'A perda de carga total é a soma das perdas maiores por atrito (f(L+Leq)/D) e das perdas localizadas (ΣK), multiplicada pela altura de velocidade (v²/2g). Leq pode representar perdas localizadas por comprimento equivalente; ΣK permite usar coeficientes diretamente.'
       },
       'energy-equation': {
         title: 'Equação da Energia para Carga Manométrica (Hₘ)',
@@ -840,6 +850,13 @@ export default function Calculator() {
           defaultUnit: 'm'
         },
         { 
+          field: 'lossCoefficientSum', 
+          label: 'Soma de Coeficientes de Perda (ΣK)', 
+          unitType: 'dimensionless',
+          units: ['adimensional'],
+          defaultUnit: 'adimensional'
+        },
+        { 
           field: 'diameter', 
           label: 'Diâmetro da Tubulação (D)', 
           unitType: 'length',
@@ -931,7 +948,7 @@ export default function Calculator() {
           field: 'density', 
           label: 'Densidade do Fluido (γ)', 
           unitType: 'density',
-          units: ['kg/m³', 'g/cm³', 'lb/ft³'],
+          units: ['kg/m³', 'g/cm³', 'lb/ft³', 'N/m³'],
           defaultUnit: 'kg/m³'
         },
         { 
