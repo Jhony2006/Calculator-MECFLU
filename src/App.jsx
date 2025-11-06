@@ -11,7 +11,6 @@ import { Label } from './components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
 import { ArrowLeft, Droplets, Gauge, Weight, Waves, TrendingUp, TrendingDown, Calculator as CalcIcon, Zap, RefreshCw, ChevronsRight, Info } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-
 // Array de objetos que define as categorias de cálculo disponíveis na tela inicial.
 // Cada objeto contém informações para renderizar um card de categoria.
 const calculatorCategories = [
@@ -799,7 +798,7 @@ export default function Calculator() {
           label: 'Diâmetro da Tubulação (D)', 
           unitType: 'length',
           units: ['m', 'cm', 'mm', 'ft', 'in'],
-          defaultUnit: 'm'
+          defaultUnit: 'mm'
         }
       ],
       'friction-factor': [
@@ -977,7 +976,7 @@ export default function Calculator() {
           label: 'Densidade do Fluido (γ)', 
           unitType: 'density',
           units: ['kg/m³', 'g/cm³', 'lb/ft³', 'N/m³'],
-          defaultUnit: 'kg/m³'
+          defaultUnit: 'N/m³'
         }
       ],
       'bernoulli': [
