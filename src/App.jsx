@@ -993,7 +993,7 @@ export default function Calculator() {
           label: 'Densidade do Fluido (γ)', 
           unitType: 'density',
           units: ['kg/m³', 'g/cm³', 'lb/ft³', 'N/m³'],
-          defaultUnit: 'N/m³'
+          defaultUnit: 'kg/m³'
         }
       ],
       'bernoulli': [
