@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://github.com/Jhony2006/Calculator-MECFLU",
+  "homepage": "https://mariananonato04.github.io/Calculator-MECFLU/",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

@@ -531,7 +531,7 @@ export default function Calculator() {
       'friction-factor': {
         title: 'Fator de Atrito (f) - Equação de Swamee-Jain',
         formula: 'f = 0.25 / [log₁₀(ε/3.7D + 5.74/Re^0.9)]²',
-        description: 'A equação de Swamee-Jain é uma aproximação para o fator de atrito de Darcy-Weisbach para escoamento turbulento em tubos. Depende da rugosidade relativa (ε/D) e do número de Reynolds (Re).'
+        description: 'A equação de Swamee-Jain é uma fórmula explícita que aproxima o fator de atrito de Darcy-Weisbach para escoamento turbulento em tubos. Esta equação é uma alternativa à equação implícita de Colebrook-White, oferecendo resultados precisos sem a necessidade de iterações. O fator de atrito (f) depende de dois parâmetros adimensionais: a rugosidade relativa do tubo (ε/D) - que representa a rugosidade absoluta dividida pelo diâmetro interno - e o número de Reynolds (Re) - que caracteriza o regime de escoamento. A fórmula é válida para escoamento turbulento (Re > 4000) e fornece resultados com erro inferior a 1% quando comparado com a equação de Colebrook-White.'
       },
       'head-loss': {
         title: 'Perda de Carga Total (hₜ)',
@@ -804,15 +804,15 @@ export default function Calculator() {
           field: 'reynolds', 
           label: 'Número de Reynolds (Re)', 
           unitType: 'dimensionless',
-          units: [''],
-          defaultUnit: ''
+          units: ['adimensional'],
+          defaultUnit: 'adimensional'
         },
         { 
           field: 'relativeRoughness', 
           label: 'Rugosidade Relativa (ε/D)', 
           unitType: 'dimensionless',
-          units: [''],
-          defaultUnit: ''
+          units: ['adimensional'],
+          defaultUnit: 'adimensional'
         }
       ],
       'head-loss': [
@@ -820,8 +820,8 @@ export default function Calculator() {
           field: 'frictionFactor', 
           label: 'Fator de Atrito (f)', 
           unitType: 'dimensionless',
-          units: [''],
-          defaultUnit: ''
+          units: ['adimensional'],
+          defaultUnit: 'adimensional'
         },
         { 
           field: 'length', 
@@ -848,8 +848,8 @@ export default function Calculator() {
           field: 'kSum', 
           label: 'Soma dos Coeficientes de Perda Localizada (Σk)', 
           unitType: 'dimensionless',
-          units: [''],
-          defaultUnit: ''
+          units: ['adimensional'],
+          defaultUnit: 'adimensional'
         }
       ],
       'energy-equation': [
@@ -1025,7 +1025,100 @@ export default function Calculator() {
 
     const config = inputConfigs[selectedCalculator.id] || [];
 
-    // Renderiza os campos de input com base na configuração.
+    // Interfaces personalizadas para Fator de Atrito e Perda de Carga
+    if (selectedCalculator.id === 'friction-factor') {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {config.map((input) => (
+            <div key={input.field} className="space-y-2">
+              <Label htmlFor={input.field} className="text-purple-100 text-base">
+                {input.label}
+              </Label>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Input
+                    id={input.field}
+                    type="number"
+                    step="any"
+                    value={inputs[input.field] || ''}
+                    onChange={(e) => handleInputChange(input.field, e.target.value)}
+                    className="bg-slate-800/50 border-purple-500/30 text-white focus:border-purple-400 h-12 text-lg"
+                    placeholder="Insira o valor"
+                  />
+                </div>
+                <Select
+                  value={units[input.field] || input.defaultUnit}
+                  onValueChange={(value) => handleUnitChange(input.field, value)}
+                >
+                  <SelectTrigger className="w-40 bg-slate-800/50 border-purple-500/30 text-purple-100 focus:border-purple-400 h-12">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-purple-500/30">
+                    {input.units.map((unit) => (
+                      <SelectItem 
+                        key={unit} 
+                        value={unit}
+                        className="text-purple-100 focus:bg-purple-500/20 focus:text-purple-100"
+                      >
+                        {unit}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (selectedCalculator.id === 'head-loss') {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {config.map((input) => (
+            <div key={input.field} className="space-y-2">
+              <Label htmlFor={input.field} className="text-purple-100 text-base">
+                {input.label}
+              </Label>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Input
+                    id={input.field}
+                    type="number"
+                    step="any"
+                    value={inputs[input.field] || ''}
+                    onChange={(e) => handleInputChange(input.field, e.target.value)}
+                    className="bg-slate-800/50 border-purple-500/30 text-white focus:border-purple-400 h-12 text-lg"
+                    placeholder="Insira o valor"
+                  />
+                </div>
+                <Select
+                  value={units[input.field] || input.defaultUnit}
+                  onValueChange={(value) => handleUnitChange(input.field, value)}
+                >
+                  <SelectTrigger className="w-40 bg-slate-800/50 border-purple-500/30 text-purple-100 focus:border-purple-400 h-12">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-purple-500/30">
+                    {input.units.map((unit) => (
+                      <SelectItem 
+                        key={unit} 
+                        value={unit}
+                        className="text-purple-100 focus:bg-purple-500/20 focus:text-purple-100"
+                      >
+                        {unit}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // Renderização padrão para outras calculadoras
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {config.map((input) => (
