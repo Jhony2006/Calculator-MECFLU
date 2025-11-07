@@ -9,8 +9,9 @@ import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Label } from './components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
-import { ArrowLeft, Droplets, Gauge, Weight, Waves, TrendingUp, TrendingDown, Calculator as CalcIcon, Zap, RefreshCw, ChevronsRight, Info } from 'lucide-react';
+import { ArrowLeft, Droplets, Gauge, Weight, Waves, TrendingUp, TrendingDown, Calculator as CalcIcon, Zap, RefreshCw, ChevronsRight, Info, History } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import HistoryPanel from './components/HistoryPanel';
 // Array de objetos que define as categorias de cálculo disponíveis na tela inicial.
 // Cada objeto contém informações para renderizar um card de categoria.
 const calculatorCategories = [
@@ -97,13 +98,6 @@ const calculatorCategories = [
     icon: Gauge,
     color: 'from-cyan-500 to-blue-600',
     description: 'Calcular NPSH disponível'
-  },
-  {
-    id: 'bernoulli',
-    name: 'Equação de Bernoulli',
-    icon: Zap,
-    color: 'from-purple-500 to-violet-500',
-    description: 'Conservação de energia no escoamento'
   },
   {
     id: 'unit-conversion',
@@ -212,6 +206,8 @@ export default function Calculator() {
   const [result, setResult] = useState(null);
   // Estado para controlar a visibilidade da caixa de explicação da fórmula.
   const [showFormula, setShowFormula] = useState(false);
+  // Estado para controlar a visibilidade do painel de histórico
+  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
 
   // Efeito que executa quando o tipo de medida no conversor de unidades muda.
   // Ele reseta as unidades 'de' e 'para' para garantir que sejam válidas para o novo tipo.
@@ -254,7 +250,17 @@ export default function Calculator() {
 
   // Manipulador para mudanças nos campos de input, atualizando o estado 'inputs'.
   const handleInputChange = (field, value) => {
-    setInputs(prev => ({ ...prev, [field]: value === '' ? '' : field === 'measurementType' || field === 'fromUnit' || field === 'toUnit' ? value : parseFloat(value) || value }));
+    // Mantém strings para campos de unidade/tipo; para demais, parseia número preservando 0
+    if (value === '') {
+      setInputs(prev => ({ ...prev, [field]: '' }));
+      return;
+    }
+    if (field === 'measurementType' || field === 'fromUnit' || field === 'toUnit') {
+      setInputs(prev => ({ ...prev, [field]: value }));
+      return;
+    }
+    const num = parseFloat(value);
+    setInputs(prev => ({ ...prev, [field]: isNaN(num) ? value : num }));
   };
 
   // Manipulador para mudanças nos seletores de unidade, atualizando o estado 'units'.
@@ -271,6 +277,39 @@ export default function Calculator() {
     }
     // Multiplica o valor pelo fator de conversão.
     return value * unitConversions[unitType][unit];
+  };
+
+  // Função para salvar cálculo no histórico
+  const saveToHistory = (calculationData) => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const history = JSON.parse(localStorage.getItem('calculationHistory') || '[]');
+      
+      // Adiciona novo cálculo no início
+      const newEntry = {
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        calculatorName: calculationData.calculatorName,
+        calculatorId: calculationData.calculatorId,
+        inputs: calculationData.inputs,
+        units: calculationData.units,
+        result: calculationData.result,
+        resultUnit: calculationData.resultUnit,
+        formula: calculationData.formula,
+        explanation: calculationData.explanation
+      };
+      
+      // Adiciona no início e limita a 25 entradas
+      const updatedHistory = [newEntry, ...history].slice(0, 25);
+      
+      localStorage.setItem('calculationHistory', JSON.stringify(updatedHistory));
+      
+      // Dispara evento customizado para atualizar o HistoryPanel
+      window.dispatchEvent(new CustomEvent('historyUpdated'));
+    } catch (error) {
+      console.error('Erro ao salvar no histórico:', error);
+    }
   };
 
   // Função principal que realiza o cálculo com base na categoria selecionada.
@@ -303,7 +342,7 @@ export default function Calculator() {
       }
       
       case 'pressure': {
-        if (inputs.force && inputs.area) {
+        if (inputs.force !== '' && inputs.force != null && inputs.area !== '' && inputs.area != null) {
           const forceSI = convertToSI(inputs.force, 'force', 'force');
           const areaSI = convertToSI(inputs.area, 'area', 'area');
           calculatedResult = forceSI / areaSI;
@@ -313,7 +352,7 @@ export default function Calculator() {
       }
       
       case 'density': {
-        if (inputs.mass && inputs.volume) {
+        if (inputs.mass !== '' && inputs.mass != null && inputs.volume !== '' && inputs.volume != null) {
           const massSI = convertToSI(inputs.mass, 'mass', 'mass');
           const volumeSI = convertToSI(inputs.volume, 'volume', 'volume');
           calculatedResult = massSI / volumeSI;
@@ -323,7 +362,7 @@ export default function Calculator() {
       }
       
       case 'water-column': {
-        if (inputs.pressure) {
+        if (inputs.pressure !== '' && inputs.pressure != null) {
           const pressureSI = convertToSI(inputs.pressure, 'pressure', 'pressure');
           const density = 1000; // água: kg/m³
           const gravity = 10; // m/s²
@@ -334,7 +373,11 @@ export default function Calculator() {
       }
       
       case 'reynolds': {
-        if (inputs.velocity && inputs.diameter && inputs.kinematicViscosity) {
+        if (
+          inputs.velocity !== '' && inputs.velocity != null &&
+          inputs.diameter !== '' && inputs.diameter != null &&
+          inputs.kinematicViscosity !== '' && inputs.kinematicViscosity != null
+        ) {
           const velocitySI = convertToSI(inputs.velocity, 'velocity', 'velocity');
           const diameterSI = convertToSI(inputs.diameter, 'diameter', 'length');
           const kinematicViscositySI = convertToSI(inputs.kinematicViscosity, 'kinematicViscosity', 'kinematicViscosity');
@@ -356,7 +399,7 @@ export default function Calculator() {
       }
       
       case 'relative-roughness': {
-        if (inputs.roughness && inputs.diameter) {
+        if (inputs.roughness !== '' && inputs.roughness != null && inputs.diameter !== '' && inputs.diameter != null) {
           const roughnessUnit = units.roughness || 'mm';
           const diameterUnit = units.diameter || 'm';
           const roughnessSI = inputs.roughness * (unitConversions.length[roughnessUnit] || 1);
@@ -370,7 +413,7 @@ export default function Calculator() {
       }
       
       case 'friction-factor': {
-        if (inputs.reynolds && inputs.relativeRoughness) {
+        if (inputs.reynolds !== '' && inputs.reynolds != null && inputs.relativeRoughness !== '' && inputs.relativeRoughness != null) {
           const reynoldsSI = inputs.reynolds; // Adimensional
           const relativeRoughnessSI = inputs.relativeRoughness; // Adimensional
           
@@ -383,13 +426,23 @@ export default function Calculator() {
       }
       
       case 'head-loss': {
-        if (inputs.frictionFactor && inputs.length && inputs.diameter && inputs.velocity && inputs.equivalentLength) {
+        // Campos obrigatórios, permitindo Leq e ΣK iguais a 0
+        const hasRequired = (
+          inputs.frictionFactor !== '' && inputs.frictionFactor != null &&
+          inputs.length !== '' && inputs.length != null &&
+          inputs.diameter !== '' && inputs.diameter != null &&
+          inputs.velocity !== '' && inputs.velocity != null
+        );
+        if (hasRequired) {
           const frictionFactorSI = inputs.frictionFactor; // Adimensional
           const lengthSI = convertToSI(inputs.length, 'length', 'length');
           const diameterSI = convertToSI(inputs.diameter, 'diameter', 'length');
           const velocitySI = convertToSI(inputs.velocity, 'velocity', 'velocity');
-          const lequivalentSI = convertToSI(inputs.equivalentLength, 'equivalentLength', 'length');
-          const sumK = parseFloat(inputs.lossCoefficientSum ?? 0); // Adimensional
+          const leqInput = (inputs.equivalentLength === '' || inputs.equivalentLength == null) ? 0 : inputs.equivalentLength;
+          const lequivalentSI = convertToSI(leqInput, 'equivalentLength', 'length');
+          const sumKRaw = (inputs.lossCoefficientSum === '' || inputs.lossCoefficientSum == null) ? 0 : inputs.lossCoefficientSum;
+          const parsedSumK = parseFloat(sumKRaw);
+          const sumK = isNaN(parsedSumK) ? 0 : parsedSumK; // Adimensional
           const g = 10; // m/s²
           
           // Perda de carga por atrito (maior) e perdas localizadas (ΣK)
@@ -398,13 +451,22 @@ export default function Calculator() {
           const velocityHead = Math.pow(velocitySI, 2) / (2 * g);
           calculatedResult = (headLossMajor + sumK) * velocityHead;
           
-          explanation = `Perda de Carga Total (hₜ) = [ f(L+Leq)/D + ΣK ] × (v²/2g)\n\nOnde:\nf = fator de atrito\nL = comprimento real da tubulação\nLeq = comprimento equivalente das perdas localizadas\nD = diâmetro da tubulação\nΣK = soma dos coeficientes de perda localizada\nv = velocidade do fluido\ng = aceleração da gravidade\n\nValores em SI:\nFator de Atrito (f) = ${frictionFactorSI.toFixed(6)}\nComprimento Real (L) = ${inputs.length} ${units.length || 'm'} = ${lengthSI.toFixed(2)} m\nComprimento Equivalente (Leq) = ${inputs.equivalentLength} ${units.equivalentLength || 'm'} = ${lequivalentSI.toFixed(2)} m\nComprimento Total (L + Leq) = ${totalLength.toFixed(2)} m\nDiâmetro (D) = ${inputs.diameter} ${units.diameter || 'm'} = ${diameterSI.toFixed(4)} m\nΣK = ${sumK.toFixed(4)} (adimensional)\nVelocidade (v) = ${inputs.velocity} ${units.velocity || 'm/s'} = ${velocitySI.toFixed(4)} m/s\ng = 10 m/s²\n\nf(L+Leq)/D = ${headLossMajor.toFixed(6)}\n(v²/2g) = ${velocityHead.toFixed(6)}\n\nPerda Total hₜ = [${headLossMajor.toFixed(6)} + ${sumK.toFixed(4)}] × ${velocityHead.toFixed(6)}\nhₜ = ${calculatedResult.toFixed(4)} m`;
+          explanation = `Perda de Carga Total (hₜ) = [ f(L+Leq)/D + ΣK ] × (v²/2g)\n\nOnde:\nf = fator de atrito\nL = comprimento real da tubulação\nLeq = comprimento equivalente das perdas localizadas\nD = diâmetro da tubulação\nΣK = soma dos coeficientes de perda localizada\nv = velocidade do fluido\ng = aceleração da gravidade\n\nValores em SI:\nFator de Atrito (f) = ${frictionFactorSI.toFixed(6)}\nComprimento Real (L) = ${inputs.length} ${units.length || 'm'} = ${lengthSI.toFixed(2)} m\nComprimento Equivalente (Leq) = ${leqInput ?? 0} ${units.equivalentLength || 'm'} = ${lequivalentSI.toFixed(2)} m\nComprimento Total (L + Leq) = ${totalLength.toFixed(2)} m\nDiâmetro (D) = ${inputs.diameter} ${units.diameter || 'm'} = ${diameterSI.toFixed(4)} m\nΣK = ${sumK.toFixed(4)} (adimensional)\nVelocidade (v) = ${inputs.velocity} ${units.velocity || 'm/s'} = ${velocitySI.toFixed(4)} m/s\ng = 10 m/s²\n\nf(L+Leq)/D = ${headLossMajor.toFixed(6)}\n(v²/2g) = ${velocityHead.toFixed(6)}\n\nPerda Total hₜ = [${headLossMajor.toFixed(6)} + ${sumK.toFixed(4)}] × ${velocityHead.toFixed(6)}\nhₜ = ${calculatedResult.toFixed(4)} m`;
         }
         break;
       }
       
       case 'energy-equation': {
-        if (inputs.z1 && inputs.z2 && inputs.p1 && inputs.p2 && inputs.v1 && inputs.v2 && inputs.headLoss && inputs.density) {
+        if (
+          inputs.z1 !== '' && inputs.z1 != null &&
+          inputs.z2 !== '' && inputs.z2 != null &&
+          inputs.p1 !== '' && inputs.p1 != null &&
+          inputs.p2 !== '' && inputs.p2 != null &&
+          inputs.v1 !== '' && inputs.v1 != null &&
+          inputs.v2 !== '' && inputs.v2 != null &&
+          inputs.headLoss !== '' && inputs.headLoss != null &&
+          inputs.density !== '' && inputs.density != null
+        ) {
           const z1SI = convertToSI(inputs.z1, 'z1', 'length');
           const z2SI = convertToSI(inputs.z2, 'z2', 'length');
           const p1SI = convertToSI(inputs.p1, 'p1', 'pressure');
@@ -424,7 +486,12 @@ export default function Calculator() {
       }
       
       case 'pump-power': {
-        if (inputs.flow && inputs.head && inputs.density && inputs.efficiency) {
+        if (
+          inputs.flow !== '' && inputs.flow != null &&
+          inputs.head !== '' && inputs.head != null &&
+          inputs.density !== '' && inputs.density != null &&
+          inputs.efficiency !== '' && inputs.efficiency != null
+        ) {
           const flowSI = convertToSI(inputs.flow, 'flow', 'flow');
           const headSI = convertToSI(inputs.head, 'head', 'length');
           const efficiencySI = inputs.efficiency / 100; // Convertendo de porcentagem para decimal
@@ -448,7 +515,13 @@ export default function Calculator() {
       }
       
       case 'npsh': {
-        if (inputs.atmosphericPressure && inputs.vaporPressure && inputs.suctionHeight && inputs.headLoss && inputs.density) {
+        if (
+          inputs.atmosphericPressure !== '' && inputs.atmosphericPressure != null &&
+          inputs.vaporPressure !== '' && inputs.vaporPressure != null &&
+          inputs.suctionHeight !== '' && inputs.suctionHeight != null &&
+          inputs.headLoss !== '' && inputs.headLoss != null &&
+          inputs.density !== '' && inputs.density != null
+        ) {
           const atmosphericPressureSI = convertToSI(inputs.atmosphericPressure, 'atmosphericPressure', 'pressure');
           const vaporPressureSI = convertToSI(inputs.vaporPressure, 'vaporPressure', 'pressure');
           const suctionHeightSI = convertToSI(inputs.suctionHeight, 'suctionHeight', 'length');
@@ -472,26 +545,9 @@ export default function Calculator() {
         break;
       }
       
-      case 'bernoulli': {
-        if (inputs.pressure1 && inputs.velocity1 && inputs.height1 && inputs.velocity2 && inputs.height2 && inputs.density) {
-          const g = 10;
-          const pressure1SI = convertToSI(inputs.pressure1, 'pressure1', 'pressure');
-          const velocity1SI = convertToSI(inputs.velocity1, 'velocity1', 'velocity');
-          const height1SI = convertToSI(inputs.height1, 'height1', 'length');
-          const velocity2SI = convertToSI(inputs.velocity2, 'velocity2', 'velocity');
-          const height2SI = convertToSI(inputs.height2, 'height2', 'length');
-          const densitySI = convertToSI(inputs.density, 'density', 'density');
-          
-          const term1 = pressure1SI + 0.5 * densitySI * Math.pow(velocity1SI, 2) + densitySI * g * height1SI;
-          calculatedResult = term1 - 0.5 * densitySI * Math.pow(velocity2SI, 2) - densitySI * g * height2SI;
-          
-          explanation = `Equação de Bernoulli:\nP₁ + ½ρv₁² + ρgh₁ = P₂ + ½ρv₁² + ρgh₂\n\nValores no Ponto 1:\nP₁ = ${inputs.pressure1} ${units.pressure1 || 'Pa'} = ${pressure1SI.toFixed(2)} Pa\nv₁ = ${inputs.velocity1} ${units.velocity1 || 'm/s'} = ${velocity1SI.toFixed(4)} m/s\nh₁ = ${inputs.height1} ${units.height1 || 'm'} = ${height1SI.toFixed(4)} m\n\nValores no Ponto 2:\nv₂ = ${inputs.velocity2} ${units.velocity2 || 'm/s'} = ${velocity2SI.toFixed(4)} m/s\nh₂ = ${inputs.height2} ${units.height2 || 'm'} = ${height2SI.toFixed(4)} m\n\nDensidade: ρ = ${inputs.density} ${units.density || 'kg/m³'} = ${densitySI.toFixed(2)} kg/m³\ng = 10 m/s²\n\nResolvendo para P₂:\nP₂ = ${calculatedResult.toFixed(2)} Pa\nP₂ = ${(calculatedResult / 1000).toFixed(4)} kPa\n\nEsta equação representa a conservação de energia ao longo de uma linha de corrente.`;
-        }
-        break;
-      }
       case 'unit-conversion': {
         const { value, measurementType, fromUnit, toUnit } = inputs;
-        if (value && measurementType && fromUnit && toUnit) {
+        if ((value !== '' && value != null) && measurementType && fromUnit && toUnit) {
           const fromFactor = unitConversions[measurementType][fromUnit]; // Fator para converter para SI
           const toFactor = unitConversions[measurementType][toUnit]; // Fator para converter para SI
           
@@ -507,6 +563,21 @@ export default function Calculator() {
 
     // Atualiza o estado 'result' com o valor e a explicação.
     setResult({ value: calculatedResult, explanation });
+    
+    // Salva no histórico se houver resultado válido
+    if (calculatedResult !== null && !isNaN(calculatedResult) && selectedCalculator) {
+      const formulaData = getFormulaExplanation(selectedCalculator.id);
+      saveToHistory({
+        calculatorName: selectedCalculator.name,
+        calculatorId: selectedCalculator.id,
+        inputs: { ...inputs },
+        units: { ...units },
+        result: calculatedResult,
+        resultUnit: getResultUnit(selectedCalculator.id, inputs),
+        formula: formulaData.formula,
+        explanation: explanation
+      });
+    }
   };
   
   // Função que retorna a explicação da fórmula para a categoria selecionada.
@@ -572,11 +643,6 @@ export default function Calculator() {
         formula: 'NPSH = Pₐₜₘ/γ − (hₐ + hₗₐ + Pᵥ/γ)',
         description: 'O NPSH disponível usa o peso específico do fluido (γ = ρg). É a coluna equivalente da pressão atmosférica menos as perdas da sucção: altura (hₐ), perdas (hₗₐ) e a coluna equivalente da pressão de vapor (Pᵥ/γ).'
       },
-      'bernoulli': {
-        title: 'Equação de Bernoulli',
-        formula: 'P + ½ρv² + ρgh = constante',
-        description: 'A equação de Bernoulli descreve a conservação de energia para um fluido em movimento. A soma da pressão (P), da energia cinética (½ρv²) e da energia potencial (ρgh) permanece constante ao longo de uma linha de corrente.'
-      },
       'unit-conversion': {
         title: 'Conversão de Unidades',
         formula: 'Valor₂ = Valor₁ × (Fator₁ / Fator₂)',
@@ -611,7 +677,6 @@ export default function Calculator() {
           case 'energy-equation': return 'm';
           case 'pump-power': return 'W';
           case 'npsh': return 'm';
-          case 'bernoulli': return 'Pa';
           case 'unit-conversion': return currentInputs.toUnit || '';
           default: return '';
       }
@@ -996,50 +1061,7 @@ export default function Calculator() {
           defaultUnit: 'kg/m³'
         }
       ],
-      'bernoulli': [
-        { 
-          field: 'pressure1', 
-          label: 'Pressão no Ponto 1 (P₁)', 
-          unitType: 'pressure',
-          units: ['Pa', 'kPa', 'bar', 'psi', 'atm'],
-          defaultUnit: 'Pa'
-        },
-        { 
-          field: 'velocity1', 
-          label: 'Velocidade no Ponto 1 (v₁)', 
-          unitType: 'velocity',
-          units: ['m/s', 'km/h', 'ft/s', 'mph'],
-          defaultUnit: 'm/s'
-        },
-        { 
-          field: 'height1', 
-          label: 'Altura no Ponto 1 (h₁)', 
-          unitType: 'length',
-          units: ['m', 'cm', 'mm', 'ft', 'in'],
-          defaultUnit: 'm'
-        },
-        { 
-          field: 'velocity2', 
-          label: 'Velocidade no Ponto 2 (v₂)', 
-          unitType: 'velocity',
-          units: ['m/s', 'km/h', 'ft/s', 'mph'],
-          defaultUnit: 'm/s'
-        },
-        { 
-          field: 'height2', 
-          label: 'Altura no Ponto 2 (h₂)', 
-          unitType: 'length',
-          units: ['m', 'cm', 'mm', 'ft', 'in'],
-          defaultUnit: 'm'
-        },
-        { 
-          field: 'density', 
-          label: 'Densidade do Fluido (γ)', 
-          unitType: 'density',
-          units: ['kg/m³', 'g/cm³', 'lb/ft³'],
-          defaultUnit: 'kg/m³'
-        }
-      ]
+      
     };
 
     const config = inputConfigs[selectedCalculator.id] || [];
@@ -1059,7 +1081,7 @@ export default function Calculator() {
                     id={input.field}
                     type="number"
                     step="any"
-                    value={inputs[input.field] || ''}
+                    value={inputs[input.field] ?? ''}
                     onChange={(e) => handleInputChange(input.field, e.target.value)}
                     className="bg-slate-800/50 border-purple-500/30 text-white focus:border-purple-400 h-12 text-lg"
                     placeholder="Insira o valor"
@@ -1105,7 +1127,7 @@ export default function Calculator() {
                     id={input.field}
                     type="number"
                     step="any"
-                    value={inputs[input.field] || ''}
+                    value={inputs[input.field] ?? ''}
                     onChange={(e) => handleInputChange(input.field, e.target.value)}
                     className="bg-slate-800/50 border-purple-500/30 text-white focus:border-purple-400 h-12 text-lg"
                     placeholder="Insira o valor"
@@ -1151,7 +1173,7 @@ export default function Calculator() {
                   id={input.field}
                   type="number"
                   step="any"
-                  value={inputs[input.field] || ''}
+                  value={inputs[input.field] ?? ''}
                   onChange={(e) => handleInputChange(input.field, e.target.value)}
                   className="bg-slate-800/50 border-purple-500/30 text-white focus:border-purple-400 h-12 text-lg"
                   placeholder="Insira o valor"
@@ -1192,12 +1214,12 @@ export default function Calculator() {
         <div className="absolute bottom-20 right-20 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
       </div>
 
-      <div className="max-w-7xl mx-auto relative z-10">
+      <div className={`max-w-7xl mx-auto relative z-10 transition-all duration-300 ${isHistoryPanelOpen ? 'mr-80' : ''}`}>
         {/* Cabeçalho da página. */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
+          className="text-center mb-12 relative"
         >
           <div className="inline-block">
             <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-purple-400 via-violet-400 to-purple-400 bg-clip-text text-transparent mb-4">
@@ -1208,6 +1230,17 @@ export default function Calculator() {
           <p className="text-purple-100/70 mt-4 text-lg">
             Cálculos precisos para dinâmica de fluidos e hidráulica
           </p>
+          {/* Botão de histórico abaixo do texto */}
+          <div className="mt-6 flex justify-center">
+            <button
+              onClick={() => setIsHistoryPanelOpen(true)}
+              className="inline-flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-full shadow-lg transition-all duration-300 hover:scale-105"
+              title="Ver histórico de cálculos"
+            >
+              <History className="w-5 h-5" />
+              Histórico
+            </button>
+          </div>
         </motion.div>
 
         {/* Animação de transição entre a tela de categorias e a tela de cálculo. */}
@@ -1366,6 +1399,9 @@ export default function Calculator() {
           )}
         </AnimatePresence>
       </div>
+      
+      {/* Painel de Histórico de Cálculos - Fixo à direita */}
+      <HistoryPanel isOpen={isHistoryPanelOpen} onClose={() => setIsHistoryPanelOpen(false)} />
     </div>
   );
 }
