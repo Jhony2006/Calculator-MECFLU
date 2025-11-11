@@ -9,9 +9,9 @@ import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Label } from './components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
-import { ArrowLeft, Droplets, Gauge, Weight, Waves, TrendingUp, Calculator as CalcIcon, Zap, RefreshCw, ChevronsRight, Info } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-
+import { ArrowLeft, Droplets, Gauge, Weight, Waves, TrendingUp, TrendingDown, Calculator as CalcIcon, Zap, RefreshCw, ChevronsRight, Info, History } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import HistoryPanel from './components/HistoryPanel';
 // Array de objetos que define as categorias de cálculo disponíveis na tela inicial.
 // Cada objeto contém informações para renderizar um card de categoria.
 const calculatorCategories = [
@@ -74,7 +74,7 @@ const calculatorCategories = [
   {
     id: 'head-loss',
     name: 'Perda de Carga',
-    icon: TrendingUp,
+    icon: TrendingDown,
     color: 'from-red-500 to-orange-600',
     description: 'Calcular perda de carga total'
   },
@@ -98,13 +98,6 @@ const calculatorCategories = [
     icon: Gauge,
     color: 'from-cyan-500 to-blue-600',
     description: 'Calcular NPSH disponível'
-  },
-  {
-    id: 'bernoulli',
-    name: 'Equação de Bernoulli',
-    icon: Zap,
-    color: 'from-purple-500 to-violet-500',
-    description: 'Conservação de energia no escoamento'
   },
   {
     id: 'unit-conversion',
@@ -180,6 +173,11 @@ const unitConversions = {
     'L/s': 0.001,
     'L/min': 0.001 / 60,
     'gal/min (US)': 0.00378541 / 60
+  },
+  kinematicViscosity: {
+    'm²/s': 1,
+    'cSt (centiStokes)': 1e-6,
+    'St (Stokes)': 1e-4
   }
 };
 
@@ -208,6 +206,8 @@ export default function Calculator() {
   const [result, setResult] = useState(null);
   // Estado para controlar a visibilidade da caixa de explicação da fórmula.
   const [showFormula, setShowFormula] = useState(false);
+  // Estado para controlar a visibilidade do painel de histórico
+  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
 
   // Efeito que executa quando o tipo de medida no conversor de unidades muda.
   // Ele reseta as unidades 'de' e 'para' para garantir que sejam válidas para o novo tipo.
@@ -250,7 +250,17 @@ export default function Calculator() {
 
   // Manipulador para mudanças nos campos de input, atualizando o estado 'inputs'.
   const handleInputChange = (field, value) => {
-    setInputs(prev => ({ ...prev, [field]: value === '' ? '' : field === 'measurementType' || field === 'fromUnit' || field === 'toUnit' ? value : parseFloat(value) || value }));
+    // Mantém strings para campos de unidade/tipo; para demais, parseia número preservando 0
+    if (value === '') {
+      setInputs(prev => ({ ...prev, [field]: '' }));
+      return;
+    }
+    if (field === 'measurementType' || field === 'fromUnit' || field === 'toUnit') {
+      setInputs(prev => ({ ...prev, [field]: value }));
+      return;
+    }
+    const num = parseFloat(value);
+    setInputs(prev => ({ ...prev, [field]: isNaN(num) ? value : num }));
   };
 
   // Manipulador para mudanças nos seletores de unidade, atualizando o estado 'units'.
@@ -267,6 +277,39 @@ export default function Calculator() {
     }
     // Multiplica o valor pelo fator de conversão.
     return value * unitConversions[unitType][unit];
+  };
+
+  // Função para salvar cálculo no histórico
+  const saveToHistory = (calculationData) => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const history = JSON.parse(localStorage.getItem('calculationHistory') || '[]');
+      
+      // Adiciona novo cálculo no início
+      const newEntry = {
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        calculatorName: calculationData.calculatorName,
+        calculatorId: calculationData.calculatorId,
+        inputs: calculationData.inputs,
+        units: calculationData.units,
+        result: calculationData.result,
+        resultUnit: calculationData.resultUnit,
+        formula: calculationData.formula,
+        explanation: calculationData.explanation
+      };
+      
+      // Adiciona no início e limita a 25 entradas
+      const updatedHistory = [newEntry, ...history].slice(0, 25);
+      
+      localStorage.setItem('calculationHistory', JSON.stringify(updatedHistory));
+      
+      // Dispara evento customizado para atualizar o HistoryPanel
+      window.dispatchEvent(new CustomEvent('historyUpdated'));
+    } catch (error) {
+      console.error('Erro ao salvar no histórico:', error);
+    }
   };
 
   // Função principal que realiza o cálculo com base na categoria selecionada.
@@ -299,7 +342,7 @@ export default function Calculator() {
       }
       
       case 'pressure': {
-        if (inputs.force && inputs.area) {
+        if (inputs.force !== '' && inputs.force != null && inputs.area !== '' && inputs.area != null) {
           const forceSI = convertToSI(inputs.force, 'force', 'force');
           const areaSI = convertToSI(inputs.area, 'area', 'area');
           calculatedResult = forceSI / areaSI;
@@ -309,7 +352,7 @@ export default function Calculator() {
       }
       
       case 'density': {
-        if (inputs.mass && inputs.volume) {
+        if (inputs.mass !== '' && inputs.mass != null && inputs.volume !== '' && inputs.volume != null) {
           const massSI = convertToSI(inputs.mass, 'mass', 'mass');
           const volumeSI = convertToSI(inputs.volume, 'volume', 'volume');
           calculatedResult = massSI / volumeSI;
@@ -319,24 +362,27 @@ export default function Calculator() {
       }
       
       case 'water-column': {
-        if (inputs.pressure) {
+        if (inputs.pressure !== '' && inputs.pressure != null) {
           const pressureSI = convertToSI(inputs.pressure, 'pressure', 'pressure');
           const density = 1000; // água: kg/m³
-          const gravity = 9.81; // m/s²
+          const gravity = 10; // m/s²
           calculatedResult = pressureSI / (density * gravity);
-          explanation = `Altura (h) = Pressão (P) / (ρ × g)\n\nValores:\nP = ${inputs.pressure} ${units.pressure || 'Pa'} = ${pressureSI.toFixed(2)} Pa\nρ (água) = 1000 kg/m³\ng = 9,81 m/s²\n\nh = ${pressureSI.toFixed(2)} / (1000 × 9,81)\nh = ${calculatedResult.toFixed(4)} m\nh = ${(calculatedResult * 100).toFixed(2)} cm\nh = ${(calculatedResult * 1000).toFixed(1)} mm`;
+          explanation = `Altura (h) = Pressão (P) / (ρ × g)\n\nValores:\nP = ${inputs.pressure} ${units.pressure || 'Pa'} = ${pressureSI.toFixed(2)} Pa\nρ (água) = 1000 kg/m³\ng = 10 m/s²\n\nh = ${pressureSI.toFixed(2)} / (1000 × 10)\nh = ${calculatedResult.toFixed(4)} m\nh = ${(calculatedResult * 100).toFixed(2)} cm\nh = ${(calculatedResult * 1000).toFixed(1)} mm`;
         }
         break;
       }
       
       case 'reynolds': {
-        if (inputs.velocity && inputs.diameter && inputs.density && inputs.viscosity) {
+        if (
+          inputs.velocity !== '' && inputs.velocity != null &&
+          inputs.diameter !== '' && inputs.diameter != null &&
+          inputs.kinematicViscosity !== '' && inputs.kinematicViscosity != null
+        ) {
           const velocitySI = convertToSI(inputs.velocity, 'velocity', 'velocity');
           const diameterSI = convertToSI(inputs.diameter, 'diameter', 'length');
-          const densitySI = convertToSI(inputs.density, 'density', 'density');
-          const viscositySI = convertToSI(inputs.viscosity, 'viscosity', 'viscosity');
+          const kinematicViscositySI = convertToSI(inputs.kinematicViscosity, 'kinematicViscosity', 'kinematicViscosity');
           
-          calculatedResult = (densitySI * velocitySI * diameterSI) / viscositySI;
+          calculatedResult = (velocitySI * diameterSI) / kinematicViscositySI;
           
           let regime = '';
           if (calculatedResult < 2300) {
@@ -347,25 +393,27 @@ export default function Calculator() {
             regime = 'Turbulento (Re > 4000)';
           }
           
-          explanation = `Número de Reynolds (Re) = (ρ × v × D) / μ\n\nValores em SI:\nρ = ${inputs.density} ${units.density || 'kg/m³'} = ${densitySI.toFixed(2)} kg/m³\nv = ${inputs.velocity} ${units.velocity || 'm/s'} = ${velocitySI.toFixed(4)} m/s\nD = ${inputs.diameter} ${units.diameter || 'm'} = ${diameterSI.toFixed(4)} m\nμ = ${inputs.viscosity} ${units.viscosity || 'Pa·s'} = ${viscositySI.toFixed(6)} Pa·s\n\nRe = (${densitySI.toFixed(2)} × ${velocitySI.toFixed(4)} × ${diameterSI.toFixed(4)}) / ${viscositySI.toFixed(6)}\nRe = ${calculatedResult.toFixed(0)}\n\nRegime de Escoamento: ${regime}`;
+          explanation = `Número de Reynolds (Re) = (v × D) / ν\n\nValores em SI:\nv = ${inputs.velocity} ${units.velocity || 'm/s'} = ${velocitySI.toFixed(4)} m/s\nD = ${inputs.diameter} ${units.diameter || 'm'} = ${diameterSI.toFixed(4)} m\nν = ${inputs.kinematicViscosity} ${units.kinematicViscosity || 'm²/s'} = ${kinematicViscositySI.toFixed(8)} m²/s\n\nRe = (${velocitySI.toFixed(4)} × ${diameterSI.toFixed(4)}) / ${kinematicViscositySI.toFixed(8)}\nRe = ${calculatedResult.toFixed(0)}\n\nRegime de Escoamento: ${regime}`;
         }
         break;
       }
       
       case 'relative-roughness': {
-        if (inputs.roughness && inputs.diameter) {
-          const roughnessSI = convertToSI(inputs.roughness, 'roughness', 'length');
-          const diameterSI = convertToSI(inputs.diameter, 'diameter', 'length');
+        if (inputs.roughness !== '' && inputs.roughness != null && inputs.diameter !== '' && inputs.diameter != null) {
+          const roughnessUnit = units.roughness || 'mm';
+          const diameterUnit = units.diameter || 'm';
+          const roughnessSI = inputs.roughness * (unitConversions.length[roughnessUnit] || 1);
+          const diameterSI = inputs.diameter * (unitConversions.length[diameterUnit] || 1);
           
           calculatedResult = roughnessSI / diameterSI;
           
-          explanation = `Rugosidade Relativa (ε/D) = Rugosidade Absoluta (ε) / Diâmetro (D)\n\nValores em SI:\nε = ${inputs.roughness} ${units.roughness || 'mm'} = ${roughnessSI.toFixed(6)} m\nD = ${inputs.diameter} ${units.diameter || 'm'} = ${diameterSI.toFixed(4)} m\n\nε/D = ${roughnessSI.toFixed(6)} / ${diameterSI.toFixed(4)} = ${calculatedResult.toFixed(6)}\n\nEste valor é adimensional e representa a rugosidade relativa da tubulação.`;
+          explanation = `Rugosidade Relativa (ε/D) = Rugosidade Absoluta (ε) / Diâmetro (D)\n\nValores em SI:\nRugosidade Absoluta (ε) = ${inputs.roughness} ${roughnessUnit} = ${roughnessSI.toFixed(6)} m\nDiâmetro (D) = ${inputs.diameter} ${diameterUnit} = ${diameterSI.toFixed(4)} m\n\nε/D = ${roughnessSI.toFixed(6)} / ${diameterSI.toFixed(4)} = ${calculatedResult.toFixed(6)}\n\nEste valor é adimensional e representa a rugosidade relativa da tubulação.\n\nExemplo: Para ε = 0,046 mm e D = 100 mm:\nε/D = 0,046 / 100 = 0,00046`;
         }
         break;
       }
       
       case 'friction-factor': {
-        if (inputs.reynolds && inputs.relativeRoughness) {
+        if (inputs.reynolds !== '' && inputs.reynolds != null && inputs.relativeRoughness !== '' && inputs.relativeRoughness != null) {
           const reynoldsSI = inputs.reynolds; // Adimensional
           const relativeRoughnessSI = inputs.relativeRoughness; // Adimensional
           
@@ -378,30 +426,47 @@ export default function Calculator() {
       }
       
       case 'head-loss': {
-        if (inputs.frictionFactor && inputs.length && inputs.diameter && inputs.velocity && inputs.kSum) {
+        // Campos obrigatórios, permitindo Leq e ΣK iguais a 0
+        const hasRequired = (
+          inputs.frictionFactor !== '' && inputs.frictionFactor != null &&
+          inputs.length !== '' && inputs.length != null &&
+          inputs.diameter !== '' && inputs.diameter != null &&
+          inputs.velocity !== '' && inputs.velocity != null
+        );
+        if (hasRequired) {
           const frictionFactorSI = inputs.frictionFactor; // Adimensional
           const lengthSI = convertToSI(inputs.length, 'length', 'length');
           const diameterSI = convertToSI(inputs.diameter, 'diameter', 'length');
           const velocitySI = convertToSI(inputs.velocity, 'velocity', 'velocity');
-          const kSumSI = inputs.kSum; // Adimensional - soma dos coeficientes de perda localizada
-          const g = 9.81; // m/s²
+          const leqInput = (inputs.equivalentLength === '' || inputs.equivalentLength == null) ? 0 : inputs.equivalentLength;
+          const lequivalentSI = convertToSI(leqInput, 'equivalentLength', 'length');
+          const sumKRaw = (inputs.lossCoefficientSum === '' || inputs.lossCoefficientSum == null) ? 0 : inputs.lossCoefficientSum;
+          const parsedSumK = parseFloat(sumKRaw);
+          const sumK = isNaN(parsedSumK) ? 0 : parsedSumK; // Adimensional
+          const g = 10; // m/s²
           
-          // Perda de carga distribuída (Darcy-Weisbach)
-          const distributedLoss = frictionFactorSI * (lengthSI / diameterSI) * (Math.pow(velocitySI, 2) / (2 * g));
+          // Perda de carga por atrito (maior) e perdas localizadas (ΣK)
+          const totalLength = lengthSI + lequivalentSI;
+          const headLossMajor = frictionFactorSI * (totalLength / diameterSI);
+          const velocityHead = Math.pow(velocitySI, 2) / (2 * g);
+          calculatedResult = (headLossMajor + sumK) * velocityHead;
           
-          // Perda de carga localizada
-          const localizedLoss = kSumSI * (Math.pow(velocitySI, 2) / (2 * g));
-          
-          // Perda de carga total
-          calculatedResult = distributedLoss + localizedLoss;
-          
-          explanation = `Perda de Carga Total (hₜ) = Perda Distribuída (hₗ) + Perda Localizada (hₘ)\n\nPerda Distribuída (Darcy-Weisbach):\nhₗ = f × (L/D) × (v²/2g)\n\nPerda Localizada:\nhₘ = Σk × (v²/2g)\n\nValores em SI:\nFator de Atrito (f) = ${frictionFactorSI.toFixed(6)}\nComprimento (L) = ${inputs.length} ${units.length || 'm'} = ${lengthSI.toFixed(2)} m\nDiâmetro (D) = ${inputs.diameter} ${units.diameter || 'm'} = ${diameterSI.toFixed(4)} m\nVelocidade (v) = ${inputs.velocity} ${units.velocity || 'm/s'} = ${velocitySI.toFixed(4)} m/s\nSoma dos Coeficientes (Σk) = ${kSumSI.toFixed(2)}\ng = 9,81 m/s²\n\nPerda Distribuída = ${distributedLoss.toFixed(4)} m\nPerda Localizada = ${localizedLoss.toFixed(4)} m\nPerda Total = ${calculatedResult.toFixed(4)} m`;
+          explanation = `Perda de Carga Total (hₜ) = [ f(L+Leq)/D + ΣK ] × (v²/2g)\n\nOnde:\nf = fator de atrito\nL = comprimento real da tubulação\nLeq = comprimento equivalente das perdas localizadas\nD = diâmetro da tubulação\nΣK = soma dos coeficientes de perda localizada\nv = velocidade do fluido\ng = aceleração da gravidade\n\nValores em SI:\nFator de Atrito (f) = ${frictionFactorSI.toFixed(6)}\nComprimento Real (L) = ${inputs.length} ${units.length || 'm'} = ${lengthSI.toFixed(2)} m\nComprimento Equivalente (Leq) = ${leqInput ?? 0} ${units.equivalentLength || 'm'} = ${lequivalentSI.toFixed(2)} m\nComprimento Total (L + Leq) = ${totalLength.toFixed(2)} m\nDiâmetro (D) = ${inputs.diameter} ${units.diameter || 'm'} = ${diameterSI.toFixed(4)} m\nΣK = ${sumK.toFixed(4)} (adimensional)\nVelocidade (v) = ${inputs.velocity} ${units.velocity || 'm/s'} = ${velocitySI.toFixed(4)} m/s\ng = 10 m/s²\n\nf(L+Leq)/D = ${headLossMajor.toFixed(6)}\n(v²/2g) = ${velocityHead.toFixed(6)}\n\nPerda Total hₜ = [${headLossMajor.toFixed(6)} + ${sumK.toFixed(4)}] × ${velocityHead.toFixed(6)}\nhₜ = ${calculatedResult.toFixed(4)} m`;
         }
         break;
       }
       
       case 'energy-equation': {
-        if (inputs.z1 && inputs.z2 && inputs.p1 && inputs.p2 && inputs.v1 && inputs.v2 && inputs.headLoss && inputs.density) {
+        if (
+          inputs.z1 !== '' && inputs.z1 != null &&
+          inputs.z2 !== '' && inputs.z2 != null &&
+          inputs.p1 !== '' && inputs.p1 != null &&
+          inputs.p2 !== '' && inputs.p2 != null &&
+          inputs.v1 !== '' && inputs.v1 != null &&
+          inputs.v2 !== '' && inputs.v2 != null &&
+          inputs.headLoss !== '' && inputs.headLoss != null &&
+          inputs.density !== '' && inputs.density != null
+        ) {
           const z1SI = convertToSI(inputs.z1, 'z1', 'length');
           const z2SI = convertToSI(inputs.z2, 'z2', 'length');
           const p1SI = convertToSI(inputs.p1, 'p1', 'pressure');
@@ -410,69 +475,79 @@ export default function Calculator() {
           const v2SI = convertToSI(inputs.v2, 'v2', 'velocity');
           const headLossSI = convertToSI(inputs.headLoss, 'headLoss', 'length');
           const densitySI = convertToSI(inputs.density, 'density', 'density');
-          const g = 9.81; // m/s²
+          const g = 10; // m/s²
           
           // Carga manométrica da bomba (HB) usando a equação da energia
           calculatedResult = (p2SI - p1SI) / (densitySI * g) + (Math.pow(v2SI, 2) - Math.pow(v1SI, 2)) / (2 * g) + (z2SI - z1SI) + headLossSI;
           
-          explanation = `Equação da Energia para Carga Manométrica da Bomba (Hₘ):\nHₘ = (P₂-P₁)/(ρg) + (v₂²-v₁²)/(2g) + (z₂-z₁) + hₜ\n\nValores em SI:\nCota 1 (z₁) = ${inputs.z1} ${units.z1 || 'm'} = ${z1SI.toFixed(2)} m\nCota 2 (z₂) = ${inputs.z2} ${units.z2 || 'm'} = ${z2SI.toFixed(2)} m\nPressão 1 (P₁) = ${inputs.p1} ${units.p1 || 'Pa'} = ${p1SI.toFixed(2)} Pa\nPressão 2 (P₂) = ${inputs.p2} ${units.p2 || 'Pa'} = ${p2SI.toFixed(2)} Pa\nVelocidade 1 (v₁) = ${inputs.v1} ${units.v1 || 'm/s'} = ${v1SI.toFixed(4)} m/s\nVelocidade 2 (v₂) = ${inputs.v2} ${units.v2 || 'm/s'} = ${v2SI.toFixed(4)} m/s\nPerda de Carga (hₜ) = ${inputs.headLoss} ${units.headLoss || 'm'} = ${headLossSI.toFixed(4)} m\nDensidade (ρ) = ${inputs.density} ${units.density || 'kg/m³'} = ${densitySI.toFixed(2)} kg/m³\ng = 9,81 m/s²\n\nHₘ = ${((p2SI - p1SI) / (densitySI * g)).toFixed(4)} + ${((Math.pow(v2SI, 2) - Math.pow(v1SI, 2)) / (2 * g)).toFixed(4)} + ${(z2SI - z1SI).toFixed(4)} + ${headLossSI.toFixed(4)}\nHₘ = ${calculatedResult.toFixed(4)} m`;
+          explanation = `Equação da Energia para Carga Manométrica da Bomba (Hₘ):\nHₘ = (P₂-P₁)/(ρg) + (v₂²-v₁²)/(2g) + (z₂-z₁) + hₜ\n\nValores em SI:\nCota 1 (z₁) = ${inputs.z1} ${units.z1 || 'm'} = ${z1SI.toFixed(2)} m\nCota 2 (z₂) = ${inputs.z2} ${units.z2 || 'm'} = ${z2SI.toFixed(2)} m\nPressão 1 (P₁) = ${inputs.p1} ${units.p1 || 'Pa'} = ${p1SI.toFixed(2)} Pa\nPressão 2 (P₂) = ${inputs.p2} ${units.p2 || 'Pa'} = ${p2SI.toFixed(2)} Pa\nVelocidade 1 (v₁) = ${inputs.v1} ${units.v1 || 'm/s'} = ${v1SI.toFixed(4)} m/s\nVelocidade 2 (v₂) = ${inputs.v2} ${units.v2 || 'm/s'} = ${v2SI.toFixed(4)} m/s\nPerda de Carga (hₜ) = ${inputs.headLoss} ${units.headLoss || 'm'} = ${headLossSI.toFixed(4)} m\nDensidade (ρ) = ${inputs.density} ${units.density || 'kg/m³'} = ${densitySI.toFixed(2)} kg/m³\ng = 10 m/s²\n\nHₘ = ${((p2SI - p1SI) / (densitySI * g)).toFixed(4)} + ${((Math.pow(v2SI, 2) - Math.pow(v1SI, 2)) / (2 * g)).toFixed(4)} + ${(z2SI - z1SI).toFixed(4)} + ${headLossSI.toFixed(4)}\nHₘ = ${calculatedResult.toFixed(4)} m`;
         }
         break;
       }
       
       case 'pump-power': {
-        if (inputs.flow && inputs.head && inputs.density && inputs.efficiency) {
+        if (
+          inputs.flow !== '' && inputs.flow != null &&
+          inputs.head !== '' && inputs.head != null &&
+          inputs.density !== '' && inputs.density != null &&
+          inputs.efficiency !== '' && inputs.efficiency != null
+        ) {
           const flowSI = convertToSI(inputs.flow, 'flow', 'flow');
           const headSI = convertToSI(inputs.head, 'head', 'length');
-          const densitySI = convertToSI(inputs.density, 'density', 'density');
           const efficiencySI = inputs.efficiency / 100; // Convertendo de porcentagem para decimal
-          const g = 9.81; // m/s²
+          const g = 10; // m/s²
+          const densityUnit = units.density || 'kg/m³';
+          let gammaSI;
+          let densitySI;
+          if (densityUnit === 'N/m³') {
+            gammaSI = inputs.density; // Já fornecido como peso específico em SI
+          } else {
+            densitySI = convertToSI(inputs.density, 'density', 'density');
+            gammaSI = densitySI * g; // Peso específico
+          }
           
-          // Potência da bomba
-          calculatedResult = (densitySI * g * flowSI * headSI) / efficiencySI;
+          // Potência da bomba: P = 𝜸 × Q × Hb (onde 𝜸 = ρg)
+          calculatedResult = (gammaSI * flowSI * headSI) / efficiencySI;
           
-          explanation = `Potência da Bomba (P) = (ρ × g × Q × H) / η\n\nValores em SI:\nDensidade (ρ) = ${inputs.density} ${units.density || 'kg/m³'} = ${densitySI.toFixed(2)} kg/m³\ng = 9,81 m/s²\nVazão (Q) = ${inputs.flow} ${units.flow || 'm³/s'} = ${flowSI.toFixed(6)} m³/s\nAltura Manométrica (H) = ${inputs.head} ${units.head || 'm'} = ${headSI.toFixed(2)} m\nEficiência (η) = ${inputs.efficiency}% = ${efficiencySI.toFixed(2)}\n\nP = (${densitySI.toFixed(2)} × 9,81 × ${flowSI.toFixed(6)} × ${headSI.toFixed(2)}) / ${efficiencySI.toFixed(2)}\nP = ${calculatedResult.toFixed(2)} W\nP = ${(calculatedResult / 1000).toFixed(4)} kW\nP = ${(calculatedResult / 745.7).toFixed(4)} hp`;
+          explanation = `Potência da Bomba (P) = 𝜸 × Q × Hb / η\nOnde: 𝜸 = ρg (peso específico)\n\nValores em SI:\n${densityUnit === 'N/m³' ? `Peso Específico (𝜸) = ${gammaSI.toFixed(2)} N/m³` : `Densidade (ρ) = ${inputs.density} ${units.density || 'kg/m³'} ⇒ ρ(SI) = ${densitySI?.toFixed(2)} kg/m³\nPeso Específico (𝜸) = ρ × g (g = 10 m/s²) = ${gammaSI.toFixed(2)} N/m³`}\nVazão (Q) = ${inputs.flow} ${units.flow || 'm³/s'} = ${flowSI.toFixed(6)} m³/s\nAltura Manométrica (Hb) = ${inputs.head} ${units.head || 'm'} = ${headSI.toFixed(2)} m\nEficiência (η) = ${inputs.efficiency}% = ${efficiencySI.toFixed(2)}\n\nP = (${gammaSI.toFixed(2)} × ${flowSI.toFixed(6)} × ${headSI.toFixed(2)}) / ${efficiencySI.toFixed(2)}\nP = ${calculatedResult.toFixed(2)} W\nP = ${(calculatedResult / 1000).toFixed(4)} kW\nP = ${(calculatedResult / 745.7).toFixed(4)} hp`;
         }
         break;
       }
       
       case 'npsh': {
-        if (inputs.atmosphericPressure && inputs.vaporPressure && inputs.suctionHeight && inputs.headLoss && inputs.density) {
+        if (
+          inputs.atmosphericPressure !== '' && inputs.atmosphericPressure != null &&
+          inputs.vaporPressure !== '' && inputs.vaporPressure != null &&
+          inputs.suctionHeight !== '' && inputs.suctionHeight != null &&
+          inputs.headLoss !== '' && inputs.headLoss != null &&
+          inputs.density !== '' && inputs.density != null
+        ) {
           const atmosphericPressureSI = convertToSI(inputs.atmosphericPressure, 'atmosphericPressure', 'pressure');
           const vaporPressureSI = convertToSI(inputs.vaporPressure, 'vaporPressure', 'pressure');
           const suctionHeightSI = convertToSI(inputs.suctionHeight, 'suctionHeight', 'length');
           const headLossSI = convertToSI(inputs.headLoss, 'headLoss', 'length');
-          const densitySI = convertToSI(inputs.density, 'density', 'density');
-          const g = 9.81; // m/s²
+          const g = 10; // m/s²
+          const densityUnit = units.density || 'kg/m³';
+          const densityOrGamma = inputs.density;
+          let gammaSI;
+          if (densityUnit === 'N/m³') {
+            gammaSI = densityOrGamma; // Já é peso específico em SI
+          } else {
+            const densitySI = convertToSI(densityOrGamma, 'density', 'density');
+            gammaSI = densitySI * g;
+          }
           
-          // NPSH Disponível
-          calculatedResult = (atmosphericPressureSI - vaporPressureSI) / (densitySI * g) - suctionHeightSI - headLossSI;
+          // NPSH Disponível usando peso específico
+          calculatedResult = (atmosphericPressureSI / gammaSI) - (suctionHeightSI + headLossSI + (vaporPressureSI / gammaSI));
           
-          explanation = `NPSH Disponível = (Pₐₜₘ - Pᵥ) / (ρg) - hₛ - hₗ\n\nValores em SI:\nPressão Atmosférica (Pₐₜₘ) = ${inputs.atmosphericPressure} ${units.atmosphericPressure || 'Pa'} = ${atmosphericPressureSI.toFixed(2)} Pa\nPressão de Vapor (Pᵥ) = ${inputs.vaporPressure} ${units.vaporPressure || 'Pa'} = ${vaporPressureSI.toFixed(2)} Pa\nAltura de Sucção (hₛ) = ${inputs.suctionHeight} ${units.suctionHeight || 'm'} = ${suctionHeightSI.toFixed(2)} m\nPerda de Carga na Sucção (hₗ) = ${inputs.headLoss} ${units.headLoss || 'm'} = ${headLossSI.toFixed(4)} m\nDensidade (ρ) = ${inputs.density} ${units.density || 'kg/m³'} = ${densitySI.toFixed(2)} kg/m³\ng = 9,81 m/s²\n\nNPSH = ${((atmosphericPressureSI - vaporPressureSI) / (densitySI * g)).toFixed(4)} - ${suctionHeightSI.toFixed(2)} - ${headLossSI.toFixed(4)}\nNPSH = ${calculatedResult.toFixed(4)} m`;
+          explanation = `NPSH Disponível = Pₐₜₘ/γ - (hₐ + hₗₐ + Pᵥ/γ)\n\nValores em SI:\nPressão Atmosférica (Pₐₜₘ) = ${inputs.atmosphericPressure} ${units.atmosphericPressure || 'Pa'} = ${atmosphericPressureSI.toFixed(2)} Pa\nPressão de Vapor (Pᵥ) = ${inputs.vaporPressure} ${units.vaporPressure || 'Pa'} = ${vaporPressureSI.toFixed(2)} Pa\nAltura (hₐ) = ${inputs.suctionHeight} ${units.suctionHeight || 'm'} = ${suctionHeightSI.toFixed(2)} m\nPerda de Carga na Sucção (hₗₐ) = ${inputs.headLoss} ${units.headLoss || 'm'} = ${headLossSI.toFixed(4)} m\n${densityUnit === 'N/m³' ? `Peso Específico (γ) = ${gammaSI.toFixed(2)} N/m³` : `Densidade (ρ) = ${densityOrGamma} ${units.density || 'kg/m³'} ⇒ γ = ρ × g (g = 10 m/s²) = ${gammaSI.toFixed(2)} N/m³`}\n\nNPSH = ${(atmosphericPressureSI / gammaSI).toFixed(4)} - (${suctionHeightSI.toFixed(2)} + ${headLossSI.toFixed(4)} + ${(vaporPressureSI / gammaSI).toFixed(4)})\nNPSH = ${calculatedResult.toFixed(4)} m`;
         }
         break;
       }
       
-      case 'bernoulli': {
-        if (inputs.pressure1 && inputs.velocity1 && inputs.height1 && inputs.velocity2 && inputs.height2 && inputs.density) {
-          const g = 9.81;
-          const pressure1SI = convertToSI(inputs.pressure1, 'pressure1', 'pressure');
-          const velocity1SI = convertToSI(inputs.velocity1, 'velocity1', 'velocity');
-          const height1SI = convertToSI(inputs.height1, 'height1', 'length');
-          const velocity2SI = convertToSI(inputs.velocity2, 'velocity2', 'velocity');
-          const height2SI = convertToSI(inputs.height2, 'height2', 'length');
-          const densitySI = convertToSI(inputs.density, 'density', 'density');
-          
-          const term1 = pressure1SI + 0.5 * densitySI * Math.pow(velocity1SI, 2) + densitySI * g * height1SI;
-          calculatedResult = term1 - 0.5 * densitySI * Math.pow(velocity2SI, 2) - densitySI * g * height2SI;
-          
-          explanation = `Equação de Bernoulli:\nP₁ + ½ρv₁² + ρgh₁ = P₂ + ½ρv₁² + ρgh₂\n\nValores no Ponto 1:\nP₁ = ${inputs.pressure1} ${units.pressure1 || 'Pa'} = ${pressure1SI.toFixed(2)} Pa\nv₁ = ${inputs.velocity1} ${units.velocity1 || 'm/s'} = ${velocity1SI.toFixed(4)} m/s\nh₁ = ${inputs.height1} ${units.height1 || 'm'} = ${height1SI.toFixed(4)} m\n\nValores no Ponto 2:\nv₂ = ${inputs.velocity2} ${units.velocity2 || 'm/s'} = ${velocity2SI.toFixed(4)} m/s\nh₂ = ${inputs.height2} ${units.height2 || 'm'} = ${height2SI.toFixed(4)} m\n\nDensidade: ρ = ${inputs.density} ${units.density || 'kg/m³'} = ${densitySI.toFixed(2)} kg/m³\n\nResolvendo para P₂:\nP₂ = ${calculatedResult.toFixed(2)} Pa\nP₂ = ${(calculatedResult / 1000).toFixed(4)} kPa\n\nEsta equação representa a conservação de energia ao longo de uma linha de corrente.`;
-        }
-        break;
-      }
       case 'unit-conversion': {
         const { value, measurementType, fromUnit, toUnit } = inputs;
-        if (value && measurementType && fromUnit && toUnit) {
+        if ((value !== '' && value != null) && measurementType && fromUnit && toUnit) {
           const fromFactor = unitConversions[measurementType][fromUnit]; // Fator para converter para SI
           const toFactor = unitConversions[measurementType][toUnit]; // Fator para converter para SI
           
@@ -488,6 +563,21 @@ export default function Calculator() {
 
     // Atualiza o estado 'result' com o valor e a explicação.
     setResult({ value: calculatedResult, explanation });
+    
+    // Salva no histórico se houver resultado válido
+    if (calculatedResult !== null && !isNaN(calculatedResult) && selectedCalculator) {
+      const formulaData = getFormulaExplanation(selectedCalculator.id);
+      saveToHistory({
+        calculatorName: selectedCalculator.name,
+        calculatorId: selectedCalculator.id,
+        inputs: { ...inputs },
+        units: { ...units },
+        result: calculatedResult,
+        resultUnit: getResultUnit(selectedCalculator.id, inputs),
+        formula: formulaData.formula,
+        explanation: explanation
+      });
+    }
   };
   
   // Função que retorna a explicação da fórmula para a categoria selecionada.
@@ -520,8 +610,8 @@ export default function Calculator() {
       },
       'reynolds': {
         title: 'Número de Reynolds (Re)',
-        formula: 'Re = (ρ × v × D) / μ',
-        description: 'O Número de Reynolds é um número adimensional que ajuda a prever padrões de escoamento. Compara as forças de inércia com as forças de viscosidade. (ρ: densidade, v: velocidade, D: comprimento característico, μ: viscosidade dinâmica).'
+        formula: 'Re = (v × D) / ν',
+        description: 'O Número de Reynolds é adimensional e compara forças de inércia com forças viscosas. Nesta forma, usa a viscosidade cinemática (ν), onde ν = μ/ρ. (v: velocidade, D: comprimento característico, ν: viscosidade cinemática).'
       },
       'relative-roughness': {
         title: 'Rugosidade Relativa (ε/D)',
@@ -531,12 +621,12 @@ export default function Calculator() {
       'friction-factor': {
         title: 'Fator de Atrito (f) - Equação de Swamee-Jain',
         formula: 'f = 0.25 / [log₁₀(ε/3.7D + 5.74/Re^0.9)]²',
-        description: 'A equação de Swamee-Jain é uma aproximação para o fator de atrito de Darcy-Weisbach para escoamento turbulento em tubos. Depende da rugosidade relativa (ε/D) e do número de Reynolds (Re).'
+        description: 'A equação de Swamee-Jain é uma fórmula explícita que aproxima o fator de atrito de Darcy-Weisbach para escoamento turbulento em tubos. Esta equação é uma alternativa à equação implícita de Colebrook-White, oferecendo resultados precisos sem a necessidade de iterações. O fator de atrito (f) depende de dois parâmetros adimensionais: a rugosidade relativa do tubo (ε/D) - que representa a rugosidade absoluta dividida pelo diâmetro interno - e o número de Reynolds (Re) - que caracteriza o regime de escoamento. A fórmula é válida para escoamento turbulento (Re > 4000) e fornece resultados com erro inferior a 1% quando comparado com a equação de Colebrook-White.'
       },
       'head-loss': {
         title: 'Perda de Carga Total (hₜ)',
-        formula: 'hₜ = f × (L/D) × (v²/2g) + Σk × (v²/2g)',
-        description: 'A perda de carga total é a soma da perda de carga distribuída (primeiro termo) e da perda de carga localizada (segundo termo). Onde f é o fator de atrito, L é o comprimento do tubo, D é o diâmetro, v é a velocidade do fluido, g é a aceleração da gravidade e Σk é a soma dos coeficientes de perda localizada.'
+        formula: 'hₜ = [ f(L+Leq)/D + ΣK ] × (v²/2g)',
+        description: 'A perda de carga total é a soma das perdas maiores por atrito (f(L+Leq)/D) e das perdas localizadas (ΣK), multiplicada pela altura de velocidade (v²/2g). Leq pode representar perdas localizadas por comprimento equivalente; ΣK permite usar coeficientes diretamente.'
       },
       'energy-equation': {
         title: 'Equação da Energia para Carga Manométrica (Hₘ)',
@@ -545,18 +635,13 @@ export default function Calculator() {
       },
       'pump-power': {
         title: 'Potência da Bomba (P)',
-        formula: 'P = ρ × g × Q × H / η',
-        description: 'A potência da bomba é calculada pelo produto da densidade do fluido (ρ), aceleração da gravidade (g), vazão (Q) e altura manométrica (H), dividido pela eficiência da bomba (η).'
+        formula: 'P = γ × Q × H / η',
+        description: 'A potência hidráulica útil é o produto do peso específico do fluido (γ = ρg), pela vazão (Q) e pela altura manométrica (H), ajustada pela eficiência (η).'
       },
       'npsh': {
         title: 'NPSH Disponível',
-        formula: 'NPSH = (Pₐₜₘ - Pᵥ)/(ρg) - hₛ - hₗ',
-        description: 'O NPSH disponível é calculado pela diferença entre a pressão atmosférica (Pₐₜₘ) e a pressão de vapor do fluido (Pᵥ), dividida pelo produto da densidade (ρ) e aceleração da gravidade (g), menos a altura de sucção (hₛ) e a perda de carga na linha de sucção (hₗ).'
-      },
-      'bernoulli': {
-        title: 'Equação de Bernoulli',
-        formula: 'P + ½ρv² + ρgh = constante',
-        description: 'A equação de Bernoulli descreve a conservação de energia para um fluido em movimento. A soma da pressão (P), da energia cinética (½ρv²) e da energia potencial (ρgh) permanece constante ao longo de uma linha de corrente.'
+        formula: 'NPSH = Pₐₜₘ/γ − (hₐ + hₗₐ + Pᵥ/γ)',
+        description: 'O NPSH disponível usa o peso específico do fluido (γ = ρg). É a coluna equivalente da pressão atmosférica menos as perdas da sucção: altura (hₐ), perdas (hₗₐ) e a coluna equivalente da pressão de vapor (Pᵥ/γ).'
       },
       'unit-conversion': {
         title: 'Conversão de Unidades',
@@ -592,7 +677,6 @@ export default function Calculator() {
           case 'energy-equation': return 'm';
           case 'pump-power': return 'W';
           case 'npsh': return 'm';
-          case 'bernoulli': return 'Pa';
           case 'unit-conversion': return currentInputs.toUnit || '';
           default: return '';
       }
@@ -755,13 +839,6 @@ export default function Calculator() {
       ],
       'reynolds': [
         { 
-          field: 'density', 
-          label: 'Densidade do Fluido (ρ)', 
-          unitType: 'density',
-          units: ['kg/m³', 'g/cm³', 'lb/ft³'],
-          defaultUnit: 'kg/m³'
-        },
-        { 
           field: 'velocity', 
           label: 'Velocidade do Escoamento (v)', 
           unitType: 'velocity',
@@ -776,11 +853,11 @@ export default function Calculator() {
           defaultUnit: 'm'
         },
         { 
-          field: 'viscosity', 
-          label: 'Viscosidade Dinâmica (μ)', 
-          unitType: 'viscosity',
-          units: ['Pa·s', 'cP (centiPoise)', 'P (Poise)'],
-          defaultUnit: 'Pa·s'
+          field: 'kinematicViscosity', 
+          label: 'Viscosidade Cinemática (ν)', 
+          unitType: 'kinematicViscosity',
+          units: ['m²/s', 'cSt (centiStokes)', 'St (Stokes)'],
+          defaultUnit: 'm²/s'
         }
       ],
       'relative-roughness': [
@@ -796,7 +873,7 @@ export default function Calculator() {
           label: 'Diâmetro da Tubulação (D)', 
           unitType: 'length',
           units: ['m', 'cm', 'mm', 'ft', 'in'],
-          defaultUnit: 'm'
+          defaultUnit: 'mm'
         }
       ],
       'friction-factor': [
@@ -804,15 +881,15 @@ export default function Calculator() {
           field: 'reynolds', 
           label: 'Número de Reynolds (Re)', 
           unitType: 'dimensionless',
-          units: [''],
-          defaultUnit: ''
+          units: ['adimensional'],
+          defaultUnit: 'adimensional'
         },
         { 
           field: 'relativeRoughness', 
           label: 'Rugosidade Relativa (ε/D)', 
           unitType: 'dimensionless',
-          units: [''],
-          defaultUnit: ''
+          units: ['adimensional'],
+          defaultUnit: 'adimensional'
         }
       ],
       'head-loss': [
@@ -820,8 +897,8 @@ export default function Calculator() {
           field: 'frictionFactor', 
           label: 'Fator de Atrito (f)', 
           unitType: 'dimensionless',
-          units: [''],
-          defaultUnit: ''
+          units: ['adimensional'],
+          defaultUnit: 'adimensional'
         },
         { 
           field: 'length', 
@@ -829,6 +906,20 @@ export default function Calculator() {
           unitType: 'length',
           units: ['m', 'cm', 'mm', 'ft', 'in'],
           defaultUnit: 'm'
+        },
+        { 
+          field: 'equivalentLength', 
+          label: 'Comprimento Equivalente (Leq)', 
+          unitType: 'length',
+          units: ['m', 'cm', 'mm', 'ft', 'in'],
+          defaultUnit: 'm'
+        },
+        { 
+          field: 'lossCoefficientSum', 
+          label: 'Soma de Coeficientes de Perda (ΣK)', 
+          unitType: 'dimensionless',
+          units: ['adimensional'],
+          defaultUnit: 'adimensional'
         },
         { 
           field: 'diameter', 
@@ -843,13 +934,6 @@ export default function Calculator() {
           unitType: 'velocity',
           units: ['m/s', 'km/h', 'ft/s', 'mph'],
           defaultUnit: 'm/s'
-        },
-        { 
-          field: 'kSum', 
-          label: 'Soma dos Coeficientes de Perda Localizada (Σk)', 
-          unitType: 'dimensionless',
-          units: [''],
-          defaultUnit: ''
         }
       ],
       'energy-equation': [
@@ -904,7 +988,7 @@ export default function Calculator() {
         },
         { 
           field: 'density', 
-          label: 'Densidade do Fluido (ρ)', 
+          label: 'Densidade do Fluido (γ)', 
           unitType: 'density',
           units: ['kg/m³', 'g/cm³', 'lb/ft³'],
           defaultUnit: 'kg/m³'
@@ -927,9 +1011,9 @@ export default function Calculator() {
         },
         { 
           field: 'density', 
-          label: 'Densidade do Fluido (ρ)', 
+          label: 'Densidade do Fluido (γ)', 
           unitType: 'density',
-          units: ['kg/m³', 'g/cm³', 'lb/ft³'],
+          units: ['kg/m³', 'g/cm³', 'lb/ft³', 'N/m³'],
           defaultUnit: 'kg/m³'
         },
         { 
@@ -957,7 +1041,7 @@ export default function Calculator() {
         },
         { 
           field: 'suctionHeight', 
-          label: 'Altura de Sucção (hₛ)', 
+          label: 'Altura (hₐ)', 
           unitType: 'length',
           units: ['m', 'cm', 'mm', 'ft', 'in'],
           defaultUnit: 'm'
@@ -971,61 +1055,111 @@ export default function Calculator() {
         },
         { 
           field: 'density', 
-          label: 'Densidade do Fluido (ρ)', 
+          label: 'Densidade do Fluido (γ)', 
           unitType: 'density',
-          units: ['kg/m³', 'g/cm³', 'lb/ft³'],
+          units: ['kg/m³', 'g/cm³', 'lb/ft³', 'N/m³'],
           defaultUnit: 'kg/m³'
         }
       ],
-      'bernoulli': [
-        { 
-          field: 'pressure1', 
-          label: 'Pressão no Ponto 1 (P₁)', 
-          unitType: 'pressure',
-          units: ['Pa', 'kPa', 'bar', 'psi', 'atm'],
-          defaultUnit: 'Pa'
-        },
-        { 
-          field: 'velocity1', 
-          label: 'Velocidade no Ponto 1 (v₁)', 
-          unitType: 'velocity',
-          units: ['m/s', 'km/h', 'ft/s', 'mph'],
-          defaultUnit: 'm/s'
-        },
-        { 
-          field: 'height1', 
-          label: 'Altura no Ponto 1 (h₁)', 
-          unitType: 'length',
-          units: ['m', 'cm', 'mm', 'ft', 'in'],
-          defaultUnit: 'm'
-        },
-        { 
-          field: 'velocity2', 
-          label: 'Velocidade no Ponto 2 (v₂)', 
-          unitType: 'velocity',
-          units: ['m/s', 'km/h', 'ft/s', 'mph'],
-          defaultUnit: 'm/s'
-        },
-        { 
-          field: 'height2', 
-          label: 'Altura no Ponto 2 (h₂)', 
-          unitType: 'length',
-          units: ['m', 'cm', 'mm', 'ft', 'in'],
-          defaultUnit: 'm'
-        },
-        { 
-          field: 'density', 
-          label: 'Densidade do Fluido (ρ)', 
-          unitType: 'density',
-          units: ['kg/m³', 'g/cm³', 'lb/ft³'],
-          defaultUnit: 'kg/m³'
-        }
-      ]
+      
     };
 
     const config = inputConfigs[selectedCalculator.id] || [];
 
-    // Renderiza os campos de input com base na configuração.
+    // Interfaces personalizadas para Fator de Atrito e Perda de Carga
+    if (selectedCalculator.id === 'friction-factor') {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {config.map((input) => (
+            <div key={input.field} className="space-y-2">
+              <Label htmlFor={input.field} className="text-purple-100 text-base">
+                {input.label}
+              </Label>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Input
+                    id={input.field}
+                    type="number"
+                    step="any"
+                    value={inputs[input.field] ?? ''}
+                    onChange={(e) => handleInputChange(input.field, e.target.value)}
+                    className="bg-slate-800/50 border-purple-500/30 text-white focus:border-purple-400 h-12 text-lg"
+                    placeholder="Insira o valor"
+                  />
+                </div>
+                <Select
+                  value={units[input.field] || input.defaultUnit}
+                  onValueChange={(value) => handleUnitChange(input.field, value)}
+                >
+                  <SelectTrigger className="w-40 bg-slate-800/50 border-purple-500/30 text-purple-100 focus:border-purple-400 h-12">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-purple-500/30">
+                    {input.units.map((unit) => (
+                      <SelectItem 
+                        key={unit} 
+                        value={unit}
+                        className="text-purple-100 focus:bg-purple-500/20 focus:text-purple-100"
+                      >
+                        {unit}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (selectedCalculator.id === 'head-loss') {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {config.map((input) => (
+            <div key={input.field} className="space-y-2">
+              <Label htmlFor={input.field} className="text-purple-100 text-base">
+                {input.label}
+              </Label>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Input
+                    id={input.field}
+                    type="number"
+                    step="any"
+                    value={inputs[input.field] ?? ''}
+                    onChange={(e) => handleInputChange(input.field, e.target.value)}
+                    className="bg-slate-800/50 border-purple-500/30 text-white focus:border-purple-400 h-12 text-lg"
+                    placeholder="Insira o valor"
+                  />
+                </div>
+                <Select
+                  value={units[input.field] || input.defaultUnit}
+                  onValueChange={(value) => handleUnitChange(input.field, value)}
+                >
+                  <SelectTrigger className="w-40 bg-slate-800/50 border-purple-500/30 text-purple-100 focus:border-purple-400 h-12">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-purple-500/30">
+                    {input.units.map((unit) => (
+                      <SelectItem 
+                        key={unit} 
+                        value={unit}
+                        className="text-purple-100 focus:bg-purple-500/20 focus:text-purple-100"
+                      >
+                        {unit}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // Renderização padrão para outras calculadoras
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {config.map((input) => (
@@ -1039,7 +1173,7 @@ export default function Calculator() {
                   id={input.field}
                   type="number"
                   step="any"
-                  value={inputs[input.field] || ''}
+                  value={inputs[input.field] ?? ''}
                   onChange={(e) => handleInputChange(input.field, e.target.value)}
                   className="bg-slate-800/50 border-purple-500/30 text-white focus:border-purple-400 h-12 text-lg"
                   placeholder="Insira o valor"
@@ -1080,12 +1214,12 @@ export default function Calculator() {
         <div className="absolute bottom-20 right-20 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
       </div>
 
-      <div className="max-w-7xl mx-auto relative z-10">
+      <div className={`max-w-7xl mx-auto relative z-10 transition-all duration-300 ${isHistoryPanelOpen ? 'mr-80' : ''}`}>
         {/* Cabeçalho da página. */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
+          className="text-center mb-12 relative"
         >
           <div className="inline-block">
             <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-purple-400 via-violet-400 to-purple-400 bg-clip-text text-transparent mb-4">
@@ -1096,6 +1230,17 @@ export default function Calculator() {
           <p className="text-purple-100/70 mt-4 text-lg">
             Cálculos precisos para dinâmica de fluidos e hidráulica
           </p>
+          {/* Botão de histórico abaixo do texto */}
+          <div className="mt-6 flex justify-center">
+            <button
+              onClick={() => setIsHistoryPanelOpen(true)}
+              className="inline-flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-full shadow-lg transition-all duration-300 hover:scale-105"
+              title="Ver histórico de cálculos"
+            >
+              <History className="w-5 h-5" />
+              Histórico
+            </button>
+          </div>
         </motion.div>
 
         {/* Animação de transição entre a tela de categorias e a tela de cálculo. */}
@@ -1254,6 +1399,9 @@ export default function Calculator() {
           )}
         </AnimatePresence>
       </div>
+      
+      {/* Painel de Histórico de Cálculos - Fixo à direita */}
+      <HistoryPanel isOpen={isHistoryPanelOpen} onClose={() => setIsHistoryPanelOpen(false)} />
     </div>
   );
 }
